@@ -31,6 +31,25 @@ function getPhotoUrl(poolType: string, shape: string, construction: string): str
   return `${SUPABASE_STORAGE_BASE}/${poolType}_${shape}_${construction}.png`
 }
 
+// Once someone has picked a pool type, we want the photo preview to show up
+// right away rather than waiting on every field — so any shape/construction
+// that isn't a real pre-rendered option yet ("I'm not sure yet", "Custom",
+// or just not picked yet) falls back to a sensible default per pool type
+// instead of dropping back to the old sketch placeholder.
+const DEFAULT_SHAPE_BY_TYPE: Record<string, string> = { inground: 'rectangle', above_ground: 'round' }
+const DEFAULT_CONSTRUCTION_BY_TYPE: Record<string, string> = { inground: 'fiberglass', above_ground: 'vinyl_liner' }
+
+function getPhotoShape(poolType: string, shape: string): string {
+  const validShapes = poolType === 'above_ground' ? REAL_ABOVE_GROUND_SHAPES : REAL_INGROUND_SHAPES
+  return validShapes.includes(shape) ? shape : DEFAULT_SHAPE_BY_TYPE[poolType]
+}
+
+function getPhotoConstruction(poolType: string, construction: string): string {
+  const validConstructions =
+    poolType === 'above_ground' ? REAL_ABOVE_GROUND_CONSTRUCTIONS : REAL_INGROUND_CONSTRUCTIONS
+  return validConstructions.includes(construction) ? construction : DEFAULT_CONSTRUCTION_BY_TYPE[poolType]
+}
+
 type FeatureName =
   | 'Slide'
   | 'Water Feature'
@@ -273,7 +292,10 @@ export default function PoolVisual({
   const isPending = !shape
   const shapeKey = `${poolType}-${effectiveShape}`
   const hasCover = cover && cover !== 'none'
-  const photoUrl = getPhotoUrl(poolType, shape, construction)
+  const photoUrl =
+    poolType === 'inground' || poolType === 'above_ground'
+      ? getPhotoUrl(poolType, getPhotoShape(poolType, shape), getPhotoConstruction(poolType, construction))
+      : null
 
   const coverLabel =
     cover === 'undecided'
