@@ -8,6 +8,7 @@ import BlogPost from './pages/BlogPost'
 import AdminPage from './admin/AdminPage'
 import AdminDealersPage from './admin/AdminDealersPage'
 import AdminBlogPage from './admin/AdminBlogPage'
+import AdminPhotosPage from './admin/AdminPhotosPage'
 import './index.css'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
@@ -21,6 +22,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         <Route path="/admin" element={<AdminPage />} />
         <Route path="/admin/dealers" element={<AdminDealersPage />} />
         <Route path="/admin/blog" element={<AdminBlogPage />} />
+        <Route path="/admin/photos" element={<AdminPhotosPage />} />
       </Routes>
     </BrowserRouter>
   </React.StrictMode>,

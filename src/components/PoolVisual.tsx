@@ -1,8 +1,29 @@
-// A hand-illustrated pool preview built entirely from SVG shapes — no
-// external images or generated art. Every layer (deck, shadow, wall,
-// coping, water, equipment, cover, fun extras) is composed at render time
-// from the shopper's current selections, so the pool visibly builds itself
-// as they move through the form.
+// The pool preview has two modes:
+//
+// - Photo mode: once pool type, shape, and construction form a real,
+//   pre-rendered combination, we show an actual AI-generated photo of that
+//   exact pool (one image per combo, generated once ahead of time via the
+//   "Pool Photos" admin tool and stored in Supabase Storage — nothing is
+//   generated live for site visitors). Fun-extras badges still overlay on
+//   top of the photo.
+// - Sketch mode (the original hand-illustrated SVG): used whenever the
+//   combination is incomplete or falls outside what's pre-rendered ("I'm
+//   not sure yet" / "Custom" shape / construction undecided), so there's
+//   still a live, responsive preview while someone is deciding.
+
+const SUPABASE_STORAGE_BASE = 'https://bpgirvmsgfqowgfwlhow.supabase.co/storage/v1/object/public/pool-photos'
+
+const REAL_INGROUND_SHAPES = ['rectangle', 'freeform', 'kidney', 'oval', 'round', 'lap']
+const REAL_ABOVE_GROUND_SHAPES = ['round', 'oval']
+const REAL_CONSTRUCTIONS = ['fiberglass', 'vinyl_liner', 'concrete_gunite']
+
+function getPhotoUrl(poolType: string, shape: string, construction: string): string | null {
+  if (poolType !== 'inground' && poolType !== 'above_ground') return null
+  const validShapes = poolType === 'above_ground' ? REAL_ABOVE_GROUND_SHAPES : REAL_INGROUND_SHAPES
+  if (!validShapes.includes(shape)) return null
+  if (!REAL_CONSTRUCTIONS.includes(construction)) return null
+  return `${SUPABASE_STORAGE_BASE}/${poolType}_${shape}_${construction}.png`
+}
 
 type FeatureName =
   | 'Slide'
@@ -167,6 +188,15 @@ function HeaterGlyph({ kind, color }: { kind: string; color: string }) {
   )
 }
 
+function CoverGlyph({ color }: { color: string }) {
+  return (
+    <svg viewBox="-10 -10 20 20" width={16} height={16} stroke={color} fill="none" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <rect x={-8} y={-5} width={16} height={10} rx={4} />
+      <path d="M -8 0 L 8 0" />
+    </svg>
+  )
+}
+
 const FEATURE_ORDER: FeatureName[] = [
   'Slide',
   'Water Feature',
@@ -237,6 +267,14 @@ export default function PoolVisual({
   const isPending = !shape
   const shapeKey = `${poolType}-${effectiveShape}`
   const hasCover = cover && cover !== 'none'
+  const photoUrl = getPhotoUrl(poolType, shape, construction)
+
+  const coverLabel =
+    cover === 'undecided'
+      ? 'Cover — TBD'
+      : hasCover
+        ? `Cover: ${cover.replace(/_/g, ' ')}`
+        : ''
 
   const filtrationColors: Record<string, string> = {
     saltwater: '#0ea5b8',
@@ -261,6 +299,28 @@ export default function PoolVisual({
 
   return (
     <div className="overflow-hidden rounded-2xl border bg-gradient-to-b from-sky-100 via-sky-50 to-white shadow-inner">
+      {photoUrl ? (
+        <div className="relative">
+          <img
+            key={photoUrl}
+            src={photoUrl}
+            alt="Photo preview of your pool"
+            className="block aspect-[4/3] w-full object-cover pool-pop-in"
+          />
+          <svg viewBox="0 0 400 300" className="absolute inset-0 h-full w-full" role="presentation">
+            {selectedFeatures.map((name) => {
+              const index = FEATURE_ORDER.indexOf(name as FeatureName)
+              if (index === -1) return null
+              const anchor = FEATURE_ANCHORS[index]
+              return (
+                <EquipmentBadge key={name} x={anchor.x} y={anchor.y} color="#0369a1" title={name}>
+                  <FeatureIcon name={name as FeatureName} />
+                </EquipmentBadge>
+              )
+            })}
+          </svg>
+        </div>
+      ) : (
       <svg viewBox="0 0 400 300" className="block w-full" role="img" aria-label="Preview of your pool">
         <defs>
           <radialGradient id="sceneVignette" cx="50%" cy="38%" r="75%">
@@ -457,6 +517,7 @@ export default function PoolVisual({
           )
         })}
       </svg>
+      )}
 
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t bg-white/70 px-4 py-2 text-xs text-slate-500">
         <span>
@@ -465,7 +526,7 @@ export default function PoolVisual({
         <span>{style.label || 'Construction — TBD'}</span>
       </div>
 
-      {(filtration || (heater && heater !== 'none')) && (
+      {(filtration || (heater && heater !== 'none') || (photoUrl && hasCover)) && (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t bg-white/70 px-4 py-2 text-xs text-slate-600">
           {filtration && (
             <span className="flex items-center gap-1.5">
@@ -477,6 +538,12 @@ export default function PoolVisual({
             <span className="flex items-center gap-1.5">
               <HeaterGlyph kind={heater} color="#e0742a" />
               {heaterLabel}
+            </span>
+          )}
+          {photoUrl && hasCover && (
+            <span className="flex items-center gap-1.5">
+              <CoverGlyph color="#215a76" />
+              {coverLabel}
             </span>
           )}
         </div>
