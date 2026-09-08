@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import LeadForm from './components/LeadForm'
 
 function App() {
@@ -9,9 +10,9 @@ function App() {
             Design My Swimming Pool
           </span>
           <nav className="text-sm text-slate-600">
-            <a href="#for-dealers" className="hover:text-sky-700">
+            <Link to="/for-dealers" className="hover:text-sky-700">
               For Dealers
-            </a>
+            </Link>
           </nav>
         </div>
       </header>
@@ -32,17 +33,17 @@ function App() {
           <LeadForm />
         </section>
 
-        <section
-          id="for-dealers"
-          className="border-t bg-white px-6 py-16 text-center"
-        >
+        <section className="border-t bg-white px-6 py-16 text-center">
           <h2 className="text-2xl font-bold">Are you a pool dealer or builder?</h2>
           <p className="mx-auto mt-2 max-w-xl text-slate-600">
             Get matched with buyers actively searching in your area.
           </p>
-          <button className="mt-6 rounded-lg border border-sky-700 px-6 py-2 font-medium text-sky-700 hover:bg-sky-50">
+          <Link
+            to="/for-dealers"
+            className="mt-6 inline-block rounded-lg border border-sky-700 px-6 py-2 font-medium text-sky-700 hover:bg-sky-50"
+          >
             Learn more
-          </button>
+          </Link>
         </section>
       </main>
     </div>
