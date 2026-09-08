@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import AdminNav from './AdminNav'
 
 type Dealer = {
   id: string
@@ -102,33 +103,13 @@ export default function LeadsDashboard() {
       .eq('id', leadId)
   }
 
-  const signOut = async () => {
-    await supabase.auth.signOut()
-  }
-
   return (
     <div className="min-h-screen bg-slate-50">
-      <header className="border-b bg-white px-6 py-4">
-        <div className="mx-auto flex max-w-6xl items-center justify-between">
-          <h1 className="text-lg font-semibold text-slate-900">Leads</h1>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={loadData}
-              className="rounded-lg border px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
-            >
-              Refresh
-            </button>
-            <button
-              onClick={signOut}
-              className="rounded-lg border px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
-            >
-              Sign out
-            </button>
-          </div>
-        </div>
-      </header>
+      <AdminNav onRefresh={loadData} />
 
       <main className="mx-auto max-w-6xl px-6 py-6">
+        <h1 className="mb-4 text-lg font-semibold text-slate-900">Leads</h1>
+
         {loading && <p className="text-sm text-slate-500">Loading…</p>}
         {error && <p className="text-sm text-red-600">{error}</p>}
 

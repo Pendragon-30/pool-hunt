@@ -1,35 +1,10 @@
-import { useEffect, useState } from 'react'
-import type { Session } from '@supabase/supabase-js'
-import { supabase } from '../lib/supabaseClient'
-import LoginForm from './LoginForm'
+import AdminGate from './AdminGate'
 import LeadsDashboard from './LeadsDashboard'
 
 export default function AdminPage() {
-  const [session, setSession] = useState<Session | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session)
-      setLoading(false)
-    })
-
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      setSession(newSession)
-    })
-
-    return () => {
-      listener.subscription.unsubscribe()
-    }
-  }, [])
-
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50">
-        <p className="text-sm text-slate-500">Loading…</p>
-      </div>
-    )
-  }
-
-  return session ? <LeadsDashboard /> : <LoginForm />
+  return (
+    <AdminGate>
+      <LeadsDashboard />
+    </AdminGate>
+  )
 }
