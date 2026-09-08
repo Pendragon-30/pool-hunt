@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 
 export default function LoginForm() {
@@ -22,7 +23,10 @@ export default function LoginForm() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-slate-50 px-4">
+      <Link to="/" className="mb-6 text-lg font-bold text-sky-700 hover:text-sky-800">
+        Design My Swimming Pool
+      </Link>
       <form
         onSubmit={handleSubmit}
         className="w-full max-w-sm space-y-4 rounded-xl border bg-white p-6 shadow-sm"

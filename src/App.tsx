@@ -6,9 +6,9 @@ function App() {
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <header className="border-b bg-white">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-          <span className="text-lg font-bold text-sky-700 sm:text-xl">
+          <Link to="/" className="text-lg font-bold text-sky-700 sm:text-xl">
             Design My Swimming Pool
-          </span>
+          </Link>
           <nav className="text-sm text-slate-600">
             <Link to="/for-dealers" className="hover:text-sky-700">
               For Dealers

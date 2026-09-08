@@ -16,21 +16,26 @@ export default function AdminNav({ onRefresh }: { onRefresh: () => void }) {
   return (
     <header className="border-b bg-white px-6 py-4">
       <div className="mx-auto flex max-w-6xl items-center justify-between">
-        <nav className="flex items-center gap-4">
-          {TABS.map((tab) => (
-            <Link
-              key={tab.path}
-              to={tab.path}
-              className={`text-sm font-semibold ${
-                location.pathname === tab.path
-                  ? 'text-sky-700'
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              {tab.label}
-            </Link>
-          ))}
-        </nav>
+        <div className="flex items-center gap-6">
+          <Link to="/" className="text-base font-bold text-sky-700 hover:text-sky-800">
+            Design My Swimming Pool
+          </Link>
+          <nav className="flex items-center gap-4">
+            {TABS.map((tab) => (
+              <Link
+                key={tab.path}
+                to={tab.path}
+                className={`text-sm font-semibold ${
+                  location.pathname === tab.path
+                    ? 'text-sky-700'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                {tab.label}
+              </Link>
+            ))}
+          </nav>
+        </div>
         <div className="flex items-center gap-3">
           <button
             onClick={onRefresh}
