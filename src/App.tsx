@@ -9,7 +9,10 @@ function App() {
           <Link to="/" className="text-lg font-bold text-sky-700 sm:text-xl">
             Design My Swimming Pool
           </Link>
-          <nav className="text-sm text-slate-600">
+          <nav className="flex items-center gap-4 text-sm text-slate-600">
+            <Link to="/blog" className="hover:text-sky-700">
+              Blog
+            </Link>
             <Link to="/for-dealers" className="hover:text-sky-700">
               For Dealers
             </Link>

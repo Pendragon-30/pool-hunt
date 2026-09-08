@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabaseClient'
 const TABS = [
   { label: 'Leads', path: '/admin' },
   { label: 'Dealers', path: '/admin/dealers' },
+  { label: 'Blog', path: '/admin/blog' },
 ]
 
 export default function AdminNav({ onRefresh }: { onRefresh: () => void }) {
