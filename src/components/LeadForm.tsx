@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import type { Tables } from '../lib/database.types'
+import PoolVisual from './PoolVisual'
 
 type FunFeature = Tables<'fun_features'>
 
@@ -10,7 +11,7 @@ const POOL_TYPES = [
   { value: 'undecided', label: "I'm not sure yet" },
 ]
 
-const SHAPES = [
+const ALL_SHAPES = [
   { value: 'rectangle', label: 'Rectangle' },
   { value: 'freeform', label: 'Freeform' },
   { value: 'kidney', label: 'Kidney' },
@@ -18,6 +19,15 @@ const SHAPES = [
   { value: 'round', label: 'Round' },
   { value: 'lap', label: 'Lap pool' },
   { value: 'custom', label: 'Custom' },
+  { value: 'undecided', label: "I'm not sure yet" },
+]
+
+// Real above-ground pools are sold round or oval — the inground-only shapes
+// (rectangle, kidney, freeform, lap, custom) don't apply, so we narrow the
+// options rather than let someone pick a shape that isn't actually offered.
+const ABOVE_GROUND_SHAPES = [
+  { value: 'round', label: 'Round' },
+  { value: 'oval', label: 'Oval' },
   { value: 'undecided', label: "I'm not sure yet" },
 ]
 
@@ -68,6 +78,13 @@ const TIMELINES = [
   { value: 'just_researching', label: 'Just researching' },
 ]
 
+const STEPS = [
+  { title: 'Tell us about your pool' },
+  { title: 'Any fun extras?' },
+  { title: 'Budget & timeline' },
+  { title: 'How should builders reach you?' },
+]
+
 function SelectField({
   label,
   value,
@@ -98,6 +115,35 @@ function SelectField({
   )
 }
 
+function StepProgress({ step }: { step: number }) {
+  return (
+    <ol className="mb-6 grid grid-cols-4 gap-2">
+      {STEPS.map((s, i) => (
+        <li key={s.title} className="text-center">
+          <div
+            className={`mx-auto flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold ${
+              i < step
+                ? 'bg-sky-700 text-white'
+                : i === step
+                  ? 'border-2 border-sky-700 text-sky-700'
+                  : 'border border-slate-300 text-slate-400'
+            }`}
+          >
+            {i + 1}
+          </div>
+          <div
+            className={`mt-1 hidden text-xs sm:block ${
+              i === step ? 'font-medium text-sky-700' : 'text-slate-400'
+            }`}
+          >
+            {s.title}
+          </div>
+        </li>
+      ))}
+    </ol>
+  )
+}
+
 export default function LeadForm() {
   const [features, setFeatures] = useState<FunFeature[]>([])
   const [selectedFeatureIds, setSelectedFeatureIds] = useState<string[]>([])
@@ -120,6 +166,19 @@ export default function LeadForm() {
   const [error, setError] = useState<string | null>(null)
   const [submitted, setSubmitted] = useState(false)
 
+  const [step, setStep] = useState(0)
+
+  const shapeOptions = poolType === 'above_ground' ? ABOVE_GROUND_SHAPES : ALL_SHAPES
+
+  const handlePoolTypeChange = (value: string) => {
+    setPoolType(value)
+    // Above-ground only offers round/oval — clear an incompatible shape
+    // pick rather than leave a hidden, invalid selection in place.
+    if (value === 'above_ground' && shape && !ABOVE_GROUND_SHAPES.some((s) => s.value === shape)) {
+      setShape('')
+    }
+  }
+
   useEffect(() => {
     supabase
       .from('fun_features')
@@ -135,6 +194,9 @@ export default function LeadForm() {
       prev.includes(id) ? prev.filter((f) => f !== id) : [...prev, id],
     )
   }
+
+  const goNext = () => setStep((s) => Math.min(s + 1, STEPS.length - 1))
+  const goBack = () => setStep((s) => Math.max(s - 1, 0))
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -163,7 +225,7 @@ export default function LeadForm() {
     })
 
     if (leadError) {
-      setError("Something went wrong submitting your info. Please try again.")
+      setError('Something went wrong submitting your info. Please try again.')
       setSubmitting(false)
       return
     }
@@ -194,105 +256,172 @@ export default function LeadForm() {
   }
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="mx-auto max-w-xl space-y-6 rounded-xl border bg-white p-6 shadow-sm"
-    >
-      <div>
-        <h2 className="text-lg font-semibold">Tell us about your pool</h2>
-        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <SelectField label="Pool type" value={poolType} onChange={setPoolType} options={POOL_TYPES} />
-          <SelectField label="Shape" value={shape} onChange={setShape} options={SHAPES} />
-          <SelectField label="Construction" value={construction} onChange={setConstruction} options={CONSTRUCTIONS} />
-          <SelectField label="Filtration" value={filtration} onChange={setFiltration} options={FILTRATIONS} />
-          <SelectField label="Heater" value={heater} onChange={setHeater} options={HEATERS} />
-          <SelectField label="Cover" value={cover} onChange={setCover} options={COVERS} />
-        </div>
-      </div>
+    <div className="mx-auto grid max-w-5xl gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="order-2 lg:order-1">
+        <form
+          onSubmit={handleSubmit}
+          className="rounded-xl border bg-white p-6 shadow-sm"
+        >
+          <StepProgress step={step} />
 
-      {features.length > 0 && (
-        <div>
-          <h2 className="text-lg font-semibold">Any fun extras?</h2>
-          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {features.map((feature) => (
-              <label
-                key={feature.id}
-                className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm has-[:checked]:border-sky-500 has-[:checked]:bg-sky-50"
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedFeatureIds.includes(feature.id)}
-                  onChange={() => toggleFeature(feature.id)}
+          {step === 0 && (
+            <div>
+              <h2 className="text-lg font-semibold">{STEPS[0].title}</h2>
+              <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <SelectField
+                  label="Pool type"
+                  value={poolType}
+                  onChange={handlePoolTypeChange}
+                  options={POOL_TYPES}
                 />
-                {feature.name}
-              </label>
-            ))}
+                <SelectField label="Shape" value={shape} onChange={setShape} options={shapeOptions} />
+                <SelectField
+                  label="Construction"
+                  value={construction}
+                  onChange={setConstruction}
+                  options={CONSTRUCTIONS}
+                />
+                <SelectField
+                  label="Filtration"
+                  value={filtration}
+                  onChange={setFiltration}
+                  options={FILTRATIONS}
+                />
+                <SelectField label="Heater" value={heater} onChange={setHeater} options={HEATERS} />
+                <SelectField label="Cover" value={cover} onChange={setCover} options={COVERS} />
+              </div>
+            </div>
+          )}
+
+          {step === 1 && (
+            <div>
+              <h2 className="text-lg font-semibold">{STEPS[1].title}</h2>
+              {features.length > 0 ? (
+                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {features.map((feature) => (
+                    <label
+                      key={feature.id}
+                      className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm has-[:checked]:border-sky-500 has-[:checked]:bg-sky-50"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedFeatureIds.includes(feature.id)}
+                        onChange={() => toggleFeature(feature.id)}
+                      />
+                      {feature.name}
+                    </label>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-3 text-sm text-slate-500">No optional extras to show right now.</p>
+              )}
+            </div>
+          )}
+
+          {step === 2 && (
+            <div>
+              <h2 className="text-lg font-semibold">{STEPS[2].title}</h2>
+              <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <SelectField
+                  label="Budget range"
+                  value={budgetRange}
+                  onChange={setBudgetRange}
+                  options={BUDGETS}
+                />
+                <SelectField label="Timeline" value={timeline} onChange={setTimeline} options={TIMELINES} />
+              </div>
+            </div>
+          )}
+
+          {step === 3 && (
+            <div>
+              <h2 className="text-lg font-semibold">{STEPS[3].title}</h2>
+              <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <label className="block text-sm font-medium text-slate-700">
+                  Name
+                  <input
+                    required
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="mt-1 block w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500"
+                  />
+                </label>
+                <label className="block text-sm font-medium text-slate-700">
+                  Email
+                  <input
+                    required
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="mt-1 block w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500"
+                  />
+                </label>
+                <label className="block text-sm font-medium text-slate-700">
+                  Phone
+                  <input
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    className="mt-1 block w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500"
+                  />
+                </label>
+                <label className="block text-sm font-medium text-slate-700">
+                  Zip code
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={zipCode}
+                    onChange={(e) => setZipCode(e.target.value)}
+                    className="mt-1 block w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500"
+                  />
+                </label>
+              </div>
+            </div>
+          )}
+
+          {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
+
+          <div className="mt-6 flex items-center justify-between">
+            <button
+              type="button"
+              onClick={goBack}
+              disabled={step === 0}
+              className="rounded-lg border px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-0"
+            >
+              Back
+            </button>
+
+            {step < STEPS.length - 1 ? (
+              <button
+                type="button"
+                onClick={goNext}
+                className="rounded-lg bg-sky-700 px-6 py-2 text-sm font-medium text-white hover:bg-sky-800"
+              >
+                Next
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={submitting}
+                className="rounded-lg bg-sky-700 px-6 py-2 text-sm font-medium text-white hover:bg-sky-800 disabled:opacity-50"
+              >
+                {submitting ? 'Submitting...' : 'Get matched with a dealer'}
+              </button>
+            )}
           </div>
-        </div>
-      )}
-
-      <div>
-        <h2 className="text-lg font-semibold">Budget & timeline</h2>
-        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <SelectField label="Budget range" value={budgetRange} onChange={setBudgetRange} options={BUDGETS} />
-          <SelectField label="Timeline" value={timeline} onChange={setTimeline} options={TIMELINES} />
-        </div>
+        </form>
       </div>
 
-      <div>
-        <h2 className="text-lg font-semibold">How should dealers reach you?</h2>
-        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <label className="block text-sm font-medium text-slate-700">
-            Name
-            <input
-              required
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="mt-1 block w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500"
-            />
-          </label>
-          <label className="block text-sm font-medium text-slate-700">
-            Email
-            <input
-              required
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 block w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500"
-            />
-          </label>
-          <label className="block text-sm font-medium text-slate-700">
-            Phone
-            <input
-              type="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              className="mt-1 block w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500"
-            />
-          </label>
-          <label className="block text-sm font-medium text-slate-700">
-            Zip code
-            <input
-              type="text"
-              inputMode="numeric"
-              value={zipCode}
-              onChange={(e) => setZipCode(e.target.value)}
-              className="mt-1 block w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500"
-            />
-          </label>
+      <div className="order-1 lg:order-2">
+        <div className="lg:sticky lg:top-6">
+          <PoolVisual poolType={poolType} shape={shape} construction={construction} />
+          <p className="mt-2 text-center text-xs text-slate-400">
+            A preview, not a final design — your dealer will confirm exact
+            specs.
+          </p>
         </div>
       </div>
-
-      {error && <p className="text-sm text-red-600">{error}</p>}
-
-      <button
-        type="submit"
-        disabled={submitting}
-        className="w-full rounded-lg bg-sky-700 px-6 py-3 font-medium text-white hover:bg-sky-800 disabled:opacity-50"
-      >
-        {submitting ? 'Submitting...' : 'Get matched with a dealer'}
-      </button>
-    </form>
+    </div>
   )
 }

@@ -30,6 +30,9 @@ function App() {
             reputable local dealer — no pressure, just a straightforward
             quote.
           </p>
+          <p className="mx-auto mt-2 max-w-2xl text-sm text-slate-500">
+            Watch a preview of your pool take shape as you go.
+          </p>
         </section>
 
         <section className="px-6 pb-16">
