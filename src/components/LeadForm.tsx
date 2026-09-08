@@ -38,6 +38,15 @@ const CONSTRUCTIONS = [
   { value: 'undecided', label: "I'm not sure yet" },
 ]
 
+// Above-ground pools are built with a steel/resin/aluminum wall over a vinyl
+// liner — fiberglass and concrete/gunite above-ground pools aren't a real
+// product, so we narrow the options rather than let someone pick a
+// construction that isn't actually offered.
+const ABOVE_GROUND_CONSTRUCTIONS = [
+  { value: 'vinyl_liner', label: 'Vinyl liner' },
+  { value: 'undecided', label: "I'm not sure yet" },
+]
+
 const FILTRATIONS = [
   { value: 'saltwater', label: 'Saltwater' },
   { value: 'traditional_chlorine', label: 'Traditional chlorine' },
@@ -169,13 +178,21 @@ export default function LeadForm() {
   const [step, setStep] = useState(0)
 
   const shapeOptions = poolType === 'above_ground' ? ABOVE_GROUND_SHAPES : ALL_SHAPES
+  const constructionOptions = poolType === 'above_ground' ? ABOVE_GROUND_CONSTRUCTIONS : CONSTRUCTIONS
 
   const handlePoolTypeChange = (value: string) => {
     setPoolType(value)
-    // Above-ground only offers round/oval — clear an incompatible shape
-    // pick rather than leave a hidden, invalid selection in place.
+    // Above-ground only offers round/oval and vinyl liner — clear any
+    // incompatible pick rather than leave a hidden, invalid selection in place.
     if (value === 'above_ground' && shape && !ABOVE_GROUND_SHAPES.some((s) => s.value === shape)) {
       setShape('')
+    }
+    if (
+      value === 'above_ground' &&
+      construction &&
+      !ABOVE_GROUND_CONSTRUCTIONS.some((c) => c.value === construction)
+    ) {
+      setConstruction('')
     }
   }
 
@@ -279,7 +296,7 @@ export default function LeadForm() {
                   label="Construction"
                   value={construction}
                   onChange={setConstruction}
-                  options={CONSTRUCTIONS}
+                  options={constructionOptions}
                 />
                 <SelectField
                   label="Filtration"

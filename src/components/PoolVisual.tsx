@@ -15,13 +15,19 @@ const SUPABASE_STORAGE_BASE = 'https://bpgirvmsgfqowgfwlhow.supabase.co/storage/
 
 const REAL_INGROUND_SHAPES = ['rectangle', 'freeform', 'kidney', 'oval', 'round', 'lap']
 const REAL_ABOVE_GROUND_SHAPES = ['round', 'oval']
-const REAL_CONSTRUCTIONS = ['fiberglass', 'vinyl_liner', 'concrete_gunite']
+const REAL_INGROUND_CONSTRUCTIONS = ['fiberglass', 'vinyl_liner', 'concrete_gunite']
+// Above-ground pools are built with a steel/resin/aluminum wall over a vinyl
+// liner -- fiberglass and concrete/gunite above-ground pools aren't a real
+// product, so there's no generated photo for those combos.
+const REAL_ABOVE_GROUND_CONSTRUCTIONS = ['vinyl_liner']
 
 function getPhotoUrl(poolType: string, shape: string, construction: string): string | null {
   if (poolType !== 'inground' && poolType !== 'above_ground') return null
   const validShapes = poolType === 'above_ground' ? REAL_ABOVE_GROUND_SHAPES : REAL_INGROUND_SHAPES
+  const validConstructions =
+    poolType === 'above_ground' ? REAL_ABOVE_GROUND_CONSTRUCTIONS : REAL_INGROUND_CONSTRUCTIONS
   if (!validShapes.includes(shape)) return null
-  if (!REAL_CONSTRUCTIONS.includes(construction)) return null
+  if (!validConstructions.includes(construction)) return null
   return `${SUPABASE_STORAGE_BASE}/${poolType}_${shape}_${construction}.png`
 }
 

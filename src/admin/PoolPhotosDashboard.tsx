@@ -28,6 +28,11 @@ const CONSTRUCTIONS = [
   { value: 'concrete_gunite', label: 'Concrete / gunite' },
 ]
 
+// Above-ground pools are built with a steel/resin/aluminum wall over a vinyl
+// liner -- fiberglass and concrete/gunite above-ground pools aren't a real
+// product, so we don't offer (or pay Gemini to generate) those combos.
+const ABOVE_GROUND_CONSTRUCTIONS = [{ value: 'vinyl_liner', label: 'Vinyl liner' }]
+
 const COMBOS: Combo[] = [
   ...INGROUND_SHAPES.flatMap((shape) =>
     CONSTRUCTIONS.map((construction) => ({
@@ -37,7 +42,7 @@ const COMBOS: Combo[] = [
     })),
   ),
   ...ABOVE_GROUND_SHAPES.flatMap((shape) =>
-    CONSTRUCTIONS.map((construction) => ({
+    ABOVE_GROUND_CONSTRUCTIONS.map((construction) => ({
       poolType: 'above_ground' as const,
       shape: shape.value,
       construction: construction.value,
@@ -54,7 +59,10 @@ function comboLabel(c: Combo) {
     (c.poolType === 'above_ground' ? ABOVE_GROUND_SHAPES : INGROUND_SHAPES).find(
       (s) => s.value === c.shape,
     )?.label ?? c.shape
-  const constructionLabel = CONSTRUCTIONS.find((m) => m.value === c.construction)?.label ?? c.construction
+  const constructionLabel =
+    (c.poolType === 'above_ground' ? ABOVE_GROUND_CONSTRUCTIONS : CONSTRUCTIONS).find(
+      (m) => m.value === c.construction,
+    )?.label ?? c.construction
   return `${c.poolType === 'above_ground' ? 'Above-ground' : 'Inground'} · ${shapeLabel} · ${constructionLabel}`
 }
 
@@ -118,6 +126,14 @@ export default function PoolPhotosDashboard() {
     setRunningAll(false)
   }
 
+  const regenerateAll = async () => {
+    setRunningAll(true)
+    for (const combo of COMBOS) {
+      await generateOne(combo)
+    }
+    setRunningAll(false)
+  }
+
   const missingCount = COMBOS.filter((c) => !urls[comboKey(c)]).length
 
   return (
@@ -134,17 +150,26 @@ export default function PoolPhotosDashboard() {
               live for visitors.
             </p>
           </div>
-          <button
-            onClick={generateAllMissing}
-            disabled={runningAll || missingCount === 0}
-            className="rounded-lg bg-sky-700 px-4 py-2 text-sm font-medium text-white hover:bg-sky-800 disabled:opacity-50"
-          >
-            {runningAll
-              ? 'Generating…'
-              : missingCount === 0
-                ? 'All photos generated'
-                : `Generate all missing (${missingCount})`}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={generateAllMissing}
+              disabled={runningAll || missingCount === 0}
+              className="rounded-lg bg-sky-700 px-4 py-2 text-sm font-medium text-white hover:bg-sky-800 disabled:opacity-50"
+            >
+              {runningAll
+                ? 'Generating…'
+                : missingCount === 0
+                  ? 'All photos generated'
+                  : `Generate all missing (${missingCount})`}
+            </button>
+            <button
+              onClick={regenerateAll}
+              disabled={runningAll || COMBOS.length === 0}
+              className="rounded-lg border border-sky-700 px-4 py-2 text-sm font-medium text-sky-700 hover:bg-sky-50 disabled:opacity-50"
+            >
+              Regenerate all ({COMBOS.length})
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -153,7 +178,19 @@ export default function PoolPhotosDashboard() {
             const st = status[key] ?? (urls[key] ? 'done' : 'idle')
             return (
               <div key={key} className="rounded-xl border bg-white p-4">
-                <div className="aspect-[4/3] w-full overflow-hidden rounded-lg bg-slate-100">
+                <div
+                  className="aspect-[4/3] w-full overflow-hidden rounded-lg bg-slate-100"
+                  style={
+                    urls[key]
+                      ? {
+                          backgroundImage:
+                            'linear-gradient(45deg, #e2e8f0 25%, transparent 25%), linear-gradient(-45deg, #e2e8f0 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e2e8f0 75%), linear-gradient(-45deg, transparent 75%, #e2e8f0 75%)',
+                          backgroundSize: '16px 16px',
+                          backgroundPosition: '0 0, 0 8px, 8px -8px, -8px 0px',
+                        }
+                      : undefined
+                  }
+                >
                   {urls[key] ? (
                     <img src={urls[key]} alt={comboLabel(combo)} className="h-full w-full object-cover" />
                   ) : (
