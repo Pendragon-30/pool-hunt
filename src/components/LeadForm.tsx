@@ -256,7 +256,7 @@ export default function LeadForm() {
   }
 
   return (
-    <div className="mx-auto grid max-w-5xl gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+    <div className="mx-auto grid max-w-6xl gap-6 lg:grid-cols-[minmax(0,1fr)_400px]">
       <div className="order-2 lg:order-1">
         <form
           onSubmit={handleSubmit}
@@ -415,7 +415,17 @@ export default function LeadForm() {
 
       <div className="order-1 lg:order-2">
         <div className="lg:sticky lg:top-6">
-          <PoolVisual poolType={poolType} shape={shape} construction={construction} />
+          <PoolVisual
+            poolType={poolType}
+            shape={shape}
+            construction={construction}
+            filtration={filtration}
+            heater={heater}
+            cover={cover}
+            selectedFeatures={features
+              .filter((f) => selectedFeatureIds.includes(f.id))
+              .map((f) => f.name)}
+          />
           <p className="mt-2 text-center text-xs text-slate-400">
             A preview, not a final design — your dealer will confirm exact
             specs.

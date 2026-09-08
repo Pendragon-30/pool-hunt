@@ -20,3 +20,20 @@ body {
 .pool-pop-in {
   animation: pool-pop-in 260ms ease-out;
 }
+
+@keyframes pool-cover-slide {
+  from {
+    transform: translateX(-16%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.pool-cover-slide {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pool-cover-slide 380ms ease-out;
+}
