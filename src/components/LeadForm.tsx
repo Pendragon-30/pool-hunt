@@ -141,26 +141,28 @@ export default function LeadForm() {
     setError(null)
     setSubmitting(true)
 
-    const { data: lead, error: leadError } = await supabase
-      .from('leads')
-      .insert({
-        name,
-        email,
-        phone: phone || null,
-        zip_code: zipCode || null,
-        pool_type: poolType || null,
-        shape: shape || null,
-        construction: construction || null,
-        filtration: filtration || null,
-        heater: heater || null,
-        cover: cover || null,
-        budget_range: budgetRange || null,
-        timeline: timeline || null,
-      })
-      .select()
-      .single()
+    // Generate the id client-side so we never need to read the row back —
+    // the public site can INSERT leads but should never be able to SELECT
+    // them (that table holds names, emails, and phone numbers).
+    const leadId = crypto.randomUUID()
 
-    if (leadError || !lead) {
+    const { error: leadError } = await supabase.from('leads').insert({
+      id: leadId,
+      name,
+      email,
+      phone: phone || null,
+      zip_code: zipCode || null,
+      pool_type: poolType || null,
+      shape: shape || null,
+      construction: construction || null,
+      filtration: filtration || null,
+      heater: heater || null,
+      cover: cover || null,
+      budget_range: budgetRange || null,
+      timeline: timeline || null,
+    })
+
+    if (leadError) {
       setError("Something went wrong submitting your info. Please try again.")
       setSubmitting(false)
       return
@@ -169,7 +171,7 @@ export default function LeadForm() {
     if (selectedFeatureIds.length > 0) {
       await supabase.from('lead_fun_features').insert(
         selectedFeatureIds.map((feature_id) => ({
-          lead_id: lead.id,
+          lead_id: leadId,
           feature_id,
         })),
       )
