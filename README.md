@@ -1,6 +1,8 @@
-# Pool Hunt
+# Design My Swimming Pool
 
 The unbiased, exhaustive pool-shopping comparison tool — sister site to Hot Tub Hunt.
+
+Live at [designmyswimmingpool.com](https://designmyswimmingpool.com).
 
 ## Getting started locally
 
