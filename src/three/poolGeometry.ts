@@ -19,10 +19,6 @@ export type PoolSize = 'small' | 'medium' | 'large'
 export const INGROUND_SHAPES: InGroundShapeId[] = ['rectangle', 'freeform', 'kidney', 'oval', 'round', 'lap']
 export const ABOVE_GROUND_SHAPES: AboveGroundShapeId[] = ['round', 'oval']
 
-// How far the poured-concrete deck extends past the pool edge on every
-// side, in feet -- matches the framing the old photo-generation prompts
-// asked for, so the overall scene doesn't suddenly look different in scale.
-export const INGROUND_DECK_MARGIN_FT = 8
 export const INGROUND_DEPTH_FT = 4.5
 export const INGROUND_DECK_THICKNESS_FT = 0.4
 export const ABOVE_GROUND_WALL_THICKNESS_FT = 0.25
@@ -111,8 +107,62 @@ export const DECK_MARGIN_SCALE_BY_SIZE: Record<PoolSize, number> = {
   large: 0.65,
 }
 
-export function getInGroundDeckMarginFt(size: PoolSize): number {
-  return INGROUND_DECK_MARGIN_FT * (DECK_MARGIN_SCALE_BY_SIZE[size] ?? 1)
+// Third pass: the fixes above make "small vs. medium vs. large" read
+// consistently WITHIN a single shape, but a separate inconsistency
+// survived across DIFFERENT shapes at the same size tier -- a "large"
+// rectangle and a "large" lap pool didn't fill the frame by the same
+// amount, because both were getting the exact same flat number of feet
+// of margin (INGROUND_DECK_MARGIN_FT) regardless of how different their
+// own baseline proportions are. An 8ft margin added to an 8ft-wide lap
+// lane more than triples its width; the same 8ft margin added to a
+// 16x32 rectangle or an 18x18 round pool is a much smaller relative
+// addition -- so shapes with a narrower baseline footprint always read
+// smaller than shapes with a wider one, independent of the size tier
+// actually selected.
+//
+// The fix is to size the margin off each shape's OWN baseline
+// ("medium", pre-SIZE_MULTIPLIERS) footprint instead of a single global
+// constant -- sqrt(baselineWidth * baselineLength) as a single
+// "characteristic size" per shape, geometric mean rather than arithmetic
+// so it isn't skewed by extremely oblong shapes like the lap pool.
+// Crucially this baseline is computed from the UNSCALED medium dimensions
+// (not the size-adjusted ones), so it still varies only by shape, not by
+// which size tier is selected -- DECK_MARGIN_SCALE_BY_SIZE above remains
+// the only thing that makes small/medium/large differ from each other.
+// DECK_MARGIN_FRACTION is tuned so a medium rectangle lands close to the
+// old flat 8ft default, keeping the already-approved rectangle renders
+// close to how they looked before this pass.
+//
+// This doesn't make every shape occupy a perfectly identical fraction of
+// the frame -- a circular or organic (kidney/freeform) outline genuinely
+// fills less of its own bounding box than a rectangle does, and that
+// residual gap is a real property of the shapes themselves, not a margin
+// bug. What it does fix is the much larger, purely-accidental spread that
+// came from applying one flat foot-count across wildly different
+// baseline footprints.
+export const DECK_MARGIN_FRACTION = 0.35
+
+function baselineCharacteristicSize(dims: { width: number; length: number }): number {
+  return Math.sqrt(dims.width * dims.length)
+}
+
+export function getInGroundDeckMarginFt(shape: InGroundShapeId, size: PoolSize): number {
+  const baseline = baselineCharacteristicSize(INGROUND_DIMENSIONS[shape])
+  return baseline * DECK_MARGIN_FRACTION * (DECK_MARGIN_SCALE_BY_SIZE[size] ?? 1)
+}
+
+// Above-ground pools previously had NO margin at all in getSceneFootprint
+// (the camera framed the bare pool wall with nothing else in the
+// footprint) -- which meant a "small" and "large" above-ground pool of
+// the same shape looked identical on screen, since the bounding-sphere
+// camera just zoomed to fit whatever wall it was given either way. This
+// gives above-ground pools the same shape-proportional, size-aware margin
+// treatment as inground (a modest yard/patio buffer standing in for the
+// deck an inground pool has), so above-ground pools get real size
+// differentiation and stay consistent with inground shapes too.
+export function getAboveGroundDeckMarginFt(shape: AboveGroundShapeId, size: PoolSize): number {
+  const baseline = baselineCharacteristicSize(ABOVE_GROUND_DIMENSIONS[shape])
+  return baseline * DECK_MARGIN_FRACTION * (DECK_MARGIN_SCALE_BY_SIZE[size] ?? 1)
 }
 
 export function getInGroundDimensions(shape: InGroundShapeId, size: PoolSize): { width: number; length: number } {
@@ -257,10 +307,11 @@ export function getSceneFootprint(
 ): { width: number; length: number } {
   if (poolType === 'above_ground') {
     const dims = getAboveGroundDimensions(shape as AboveGroundShapeId, size)
-    return { width: dims.width, length: dims.length }
+    const margin = getAboveGroundDeckMarginFt(shape as AboveGroundShapeId, size)
+    return { width: dims.width + margin * 2, length: dims.length + margin * 2 }
   }
   const dims = getInGroundDimensions(shape as InGroundShapeId, size)
-  const deckMargin = getInGroundDeckMarginFt(size)
+  const deckMargin = getInGroundDeckMarginFt(shape as InGroundShapeId, size)
   return { width: dims.width + deckMargin * 2, length: dims.length + deckMargin * 2 }
 }
 

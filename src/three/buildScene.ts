@@ -6,6 +6,7 @@ import {
   buildFlatOutlineGeometry,
   buildGroundWithHoleGeometry,
   buildWallStripGeometry,
+  getAboveGroundDeckMarginFt,
   getAboveGroundDimensions,
   getAboveGroundOutlineShape,
   getInGroundDeckMarginFt,
@@ -118,10 +119,12 @@ function buildInGroundScene(
   // Deck: a large plate with a hole cut to this exact pool outline, so it
   // is flush against the basin walls by construction -- there is no way
   // for the deck and the pool edge to disagree about where the edge is.
-  // The margin itself is size-aware (see getInGroundDeckMarginFt) -- a
-  // fixed margin at every size is what made "small" read as a tiny pool
-  // swallowed by a comparatively huge deck.
-  const deckMargin = getInGroundDeckMarginFt(size)
+  // The margin itself is size- AND shape-aware (see getInGroundDeckMarginFt)
+  // -- a fixed margin at every size is what made "small" read as a tiny
+  // pool swallowed by a comparatively huge deck, and a flat margin shared
+  // across every shape is what made e.g. a "large" lap pool read smaller
+  // than an equally-"large" rectangle.
+  const deckMargin = getInGroundDeckMarginFt(shape, size)
   const deckOuterWidth = bounds.width + deckMargin * 2
   const deckOuterLength = bounds.length + deckMargin * 2
   const deckGeometry = buildDeckWithHoleGeometry(deckOuterWidth, deckOuterLength, localPoints, 2.5)
@@ -229,10 +232,18 @@ function buildAboveGroundScene(
   water.position.y = dims.wallHeight - ABOVE_GROUND_WATER_Y_MARGIN
   group.add(water)
 
-  // Same tight-border approach as the inground scene above -- a small
-  // fixed margin past the pool wall's own half-diagonal, not a big
-  // fraction of its longest side.
-  const groundHalfDiagonal = Math.hypot(dims.width / 2, dims.length / 2)
+  // Same size- and shape-aware margin as the inground deck (see
+  // getAboveGroundDeckMarginFt) -- above-ground pools have no poured
+  // deck, but this grass/patio buffer stands in for one, and matching it
+  // to getSceneFootprint's own margin is what actually gives above-ground
+  // pools real small/medium/large differentiation: previously this ground
+  // plate (and the camera framing it drives) used only the bare pool
+  // wall with no margin at all, so every size zoomed to fill the frame
+  // identically.
+  const deckMargin = getAboveGroundDeckMarginFt(shape, size)
+  const outerWidth = dims.width + deckMargin * 2
+  const outerLength = dims.length + deckMargin * 2
+  const groundHalfDiagonal = Math.hypot(outerWidth / 2, outerLength / 2)
   const groundRadius = groundHalfDiagonal + 2
   const ground = new THREE.Mesh(
     new THREE.CircleGeometry(groundRadius, 48),
@@ -257,7 +268,10 @@ function buildAboveGroundScene(
     group.add(buildLedLightingGlow(worldPoints, dims.wallHeight - ABOVE_GROUND_WATER_Y_MARGIN + 0.05))
   }
 
-  const ringOffset = 3
+  // Was a flat 3ft regardless of size or shape -- now scales with the
+  // same margin as the ground plate above, consistent with how the
+  // inground scene ties its own ringOffset to deckMargin.
+  const ringOffset = deckMargin * 0.5
   for (const slug of extras) {
     const placement = getSlotPlacement(slug, dims.width, dims.length, ringOffset)
     const accessory = buildExtraGroup(slug)
