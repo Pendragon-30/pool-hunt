@@ -71,12 +71,21 @@ const COVERS = [
   { value: 'undecided', label: "I'm not sure yet" },
 ]
 
+// Inground pools (especially concrete/gunite, or anything with a heater,
+// automatic cover, and a couple of fun extras) commonly land well above
+// $100k, so a single open-ended "$100k+" bucket was swallowing most
+// inground leads without telling a dealer anything useful about their
+// actual budget. Above-ground shoppers are usually well under $25k, so the
+// low end stays granular too -- this just adds resolution at the top where
+// inground leads actually cluster.
 const BUDGETS = [
   { value: 'under_25k', label: 'Under $25k' },
   { value: '25k_50k', label: '$25k – $50k' },
   { value: '50k_75k', label: '$50k – $75k' },
   { value: '75k_100k', label: '$75k – $100k' },
-  { value: '100k_plus', label: '$100k+' },
+  { value: '100k_150k', label: '$100k – $150k' },
+  { value: '150k_200k', label: '$150k – $200k' },
+  { value: '200k_plus', label: '$200k+' },
   { value: 'not_sure', label: 'Not sure yet' },
 ]
 
