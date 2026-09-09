@@ -54,6 +54,8 @@ export type BuiltScene = {
   cameraTarget: THREE.Vector3
   cameraElevation: number
   cameraAzimuth: number
+  /** Half-width the shadow camera's frustum needs to cover this scene. */
+  sceneRadius: number
 }
 
 const FOV_DEGREES = 32
@@ -70,13 +72,16 @@ function buildInGroundScene(shape: InGroundShapeId, construction: ConstructionId
   const constructionMaterial = getConstructionMaterial(construction)
 
   // Basin walls: from coping (y=0) down to the floor.
-  const wallGeometry = buildWallStripGeometry(localPoints, 0, -INGROUND_DEPTH_FT)
-  group.add(new THREE.Mesh(wallGeometry, constructionMaterial))
+  const wall = new THREE.Mesh(buildWallStripGeometry(localPoints, 0, -INGROUND_DEPTH_FT), constructionMaterial)
+  wall.castShadow = true
+  wall.receiveShadow = true
+  group.add(wall)
 
   // Floor.
   const floorGeometry = buildFlatOutlineGeometry(localPoints)
   const floor = new THREE.Mesh(floorGeometry, constructionMaterial)
   floor.position.y = -INGROUND_DEPTH_FT
+  floor.receiveShadow = true
   group.add(floor)
 
   // Water surface.
@@ -91,7 +96,10 @@ function buildInGroundScene(shape: InGroundShapeId, construction: ConstructionId
   const deckOuterWidth = bounds.width + INGROUND_DECK_MARGIN_FT * 2
   const deckOuterLength = bounds.length + INGROUND_DECK_MARGIN_FT * 2
   const deckGeometry = buildDeckWithHoleGeometry(deckOuterWidth, deckOuterLength, localPoints, 2.5)
-  group.add(new THREE.Mesh(deckGeometry, getDeckMaterial()))
+  const deck = new THREE.Mesh(deckGeometry, getDeckMaterial())
+  deck.castShadow = true
+  deck.receiveShadow = true
+  group.add(deck)
 
   // A little grass peeking out beyond the deck for context.
   const groundRadius = Math.max(deckOuterWidth, deckOuterLength) * 0.85
@@ -101,6 +109,7 @@ function buildInGroundScene(shape: InGroundShapeId, construction: ConstructionId
   )
   ground.rotation.x = -Math.PI / 2
   ground.position.y = -0.05
+  ground.receiveShadow = true
   group.add(ground)
 
   const hasRealCover = Boolean(cover) && cover !== 'none' && cover !== 'undecided'
@@ -108,6 +117,8 @@ function buildInGroundScene(shape: InGroundShapeId, construction: ConstructionId
     const coverGeometry = buildFlatOutlineGeometry(localPoints)
     const coverMesh = new THREE.Mesh(coverGeometry, getCoverMaterial(cover))
     coverMesh.position.y = 0.02
+    coverMesh.castShadow = true
+    coverMesh.receiveShadow = true
     group.add(coverMesh)
   }
 
@@ -124,10 +135,24 @@ function buildInGroundScene(shape: InGroundShapeId, construction: ConstructionId
     const accessory = buildExtraGroup(slug)
     accessory.position.set(placement.x, 0, placement.z)
     accessory.rotation.y = placement.rotationY
+    enableShadows(accessory)
     group.add(accessory)
   }
 
   return group
+}
+
+// Applied to every accessory group -- rather than setting castShadow /
+// receiveShadow on each individual mesh inside every builder function in
+// extras.ts, every accessory gets both flags set uniformly here in one
+// place once it's built.
+function enableShadows(object: THREE.Object3D): void {
+  object.traverse((obj) => {
+    if (obj instanceof THREE.Mesh) {
+      obj.castShadow = true
+      obj.receiveShadow = true
+    }
+  })
 }
 
 function buildAboveGroundScene(shape: AboveGroundShapeId, cover: string, extras: ExtraSlug[], ledLighting: boolean): THREE.Group {
@@ -139,8 +164,10 @@ function buildAboveGroundScene(shape: AboveGroundShapeId, cover: string, extras:
 
   const wallMaterial = getAboveGroundWallMaterial()
   // Exterior wall, raised from ground level up to the rim.
-  const wallGeometry = buildWallStripGeometry(localPoints, dims.wallHeight, 0)
-  group.add(new THREE.Mesh(wallGeometry, wallMaterial))
+  const wall = new THREE.Mesh(buildWallStripGeometry(localPoints, dims.wallHeight, 0), wallMaterial)
+  wall.castShadow = true
+  wall.receiveShadow = true
+  group.add(wall)
 
   // A thin cap ring at the rim, and a liner-colored basin visible from
   // above through the open top.
@@ -148,6 +175,7 @@ function buildAboveGroundScene(shape: AboveGroundShapeId, cover: string, extras:
   const floorGeometry = buildFlatOutlineGeometry(localPoints)
   const floor = new THREE.Mesh(floorGeometry, linerMaterial)
   floor.position.y = ABOVE_GROUND_WALL_THICKNESS_FT
+  floor.receiveShadow = true
   group.add(floor)
 
   const waterGeometry = buildFlatOutlineGeometry(localPoints)
@@ -162,6 +190,7 @@ function buildAboveGroundScene(shape: AboveGroundShapeId, cover: string, extras:
   )
   ground.rotation.x = -Math.PI / 2
   ground.position.y = -0.02
+  ground.receiveShadow = true
   group.add(ground)
 
   const hasRealCover = Boolean(cover) && cover !== 'none' && cover !== 'undecided'
@@ -169,6 +198,8 @@ function buildAboveGroundScene(shape: AboveGroundShapeId, cover: string, extras:
     const coverGeometry = buildFlatOutlineGeometry(localPoints)
     const coverMesh = new THREE.Mesh(coverGeometry, getCoverMaterial(cover))
     coverMesh.position.y = dims.wallHeight + 0.03
+    coverMesh.castShadow = true
+    coverMesh.receiveShadow = true
     group.add(coverMesh)
   }
 
@@ -184,6 +215,7 @@ function buildAboveGroundScene(shape: AboveGroundShapeId, cover: string, extras:
     const accessory = buildExtraGroup(slug)
     accessory.position.set(placement.x, 0, placement.z)
     accessory.rotation.y = placement.rotationY
+    enableShadows(accessory)
     group.add(accessory)
   }
 
@@ -210,6 +242,7 @@ export function buildPoolScene(config: PoolSceneConfig): BuiltScene {
     cameraTarget: new THREE.Vector3(0, config.poolType === 'above_ground' ? ABOVE_GROUND_DIMENSIONS[config.shape as AboveGroundShapeId].wallHeight / 2 : -0.6, 0),
     cameraElevation: THREE.MathUtils.degToRad(CAMERA_ELEVATION_DEG),
     cameraAzimuth: THREE.MathUtils.degToRad(CAMERA_AZIMUTH_DEG),
+    sceneRadius: boundingRadius,
   }
 }
 
