@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useCompositePhoto } from '../hooks/useCompositePhoto'
 
 // The pool preview always shows a real AI-generated photo of the pool being
 // described — one image per pool type / shape / construction combination,
@@ -18,6 +19,16 @@ import { useState } from 'react'
 // "LED Lighting", isn't a sticker at all — it's a soft color glow rendered
 // directly onto the water, since a translucent lighting effect can't
 // survive the chroma-key background removal every sticker goes through.
+//
+// Whenever a cover and/or extras are selected, this component ALSO kicks
+// off a request (via useCompositePhoto) for a fully-baked composite photo
+// -- the real pool photo edited by Gemini to add those elements directly
+// into the scene, sharing its actual lighting/perspective/pool outline
+// instead of being layered on top as separate flat stickers. That request
+// is generated lazily on first request per combo and cached forever server
+// side, so it can take a few seconds the first time and is instant after.
+// Until it's ready (or if it's unavailable/rate-limited), the sticker-based
+// preview below keeps showing so there's never a blank or broken state.
 
 const SUPABASE_STORAGE_BASE = 'https://bpgirvmsgfqowgfwlhow.supabase.co/storage/v1/object/public/pool-photos'
 const FUN_EXTRAS_STORAGE_BASE = 'https://bpgirvmsgfqowgfwlhow.supabase.co/storage/v1/object/public/fun-extras'
@@ -432,6 +443,20 @@ export default function PoolVisual({
 
   const hasCover = cover && cover !== 'none'
 
+  // Ask for (or reuse the cached) fully-baked composite photo -- see the
+  // comment at the top of this file and src/hooks/useCompositePhoto.ts.
+  const extraSlugs = selectedFeatures
+    .filter((name): name is Exclude<FeatureName, 'LED Lighting'> => name !== 'LED Lighting' && name in FEATURE_SLUGS)
+    .map((name) => FEATURE_SLUGS[name])
+  const { status: compositeStatus, url: compositeUrl } = useCompositePhoto({
+    poolType: effectivePoolType,
+    shape: effectiveShape,
+    construction: effectiveConstruction,
+    cover: hasCover && cover !== 'undecided' ? cover : 'none',
+    extras: extraSlugs,
+  })
+  const useComposite = compositeStatus === 'ready' && Boolean(compositeUrl)
+
   const coverLabel =
     cover === 'undecided' ? 'Cover — TBD' : hasCover ? `Cover: ${cover.replace(/_/g, ' ')}` : ''
 
@@ -460,11 +485,16 @@ export default function PoolVisual({
     <div className="overflow-hidden rounded-2xl border bg-gradient-to-b from-sky-100 via-sky-50 to-white shadow-inner">
       <div className="relative">
         <img
-          key={photoUrl}
-          src={photoUrl}
+          key={useComposite ? compositeUrl : photoUrl}
+          src={useComposite ? (compositeUrl as string) : photoUrl}
           alt="Photo preview of your pool"
           className="block aspect-[4/3] w-full object-cover pool-pop-in"
         />
+        {/* Everything below is baked directly into the photo once a composite
+            is ready, so the sticker overlays only render as the fallback
+            preview while one isn't (yet) available. LED lighting is the one
+            exception -- it's always a separate code-rendered glow, layered
+            on top either way. */}
         <svg viewBox="0 0 400 300" className="absolute inset-0 h-full w-full" role="presentation">
           <defs>
             {/* Soft grounding shadow under every sticker overlay (extras + cover)
@@ -474,25 +504,32 @@ export default function PoolVisual({
               <feDropShadow dx="0" dy="4" stdDeviation="3.5" floodColor="#0f172a" floodOpacity="0.35" />
             </filter>
           </defs>
-          {hasCover && cover !== 'undecided' && (
+          {!useComposite && hasCover && cover !== 'undecided' && (
             <CoverOverlay key={cover} cover={cover} poolType={effectivePoolType} />
           )}
           {/* LED lighting can't show through a cover, so it only renders when the water is visible. */}
           {!hasCover && selectedFeatures.includes('LED Lighting') && (
             <LedLightingGlow poolType={effectivePoolType} />
           )}
-          {selectedFeatures.map((name) => {
-            const index = ANCHORED_FEATURE_ORDER.indexOf(name as Exclude<FeatureName, 'LED Lighting'>)
-            if (index === -1) return null
-            return (
-              <ExtraOverlay
-                key={name}
-                name={name as Exclude<FeatureName, 'LED Lighting'>}
-                anchor={FEATURE_ANCHORS[index]}
-              />
-            )
-          })}
+          {!useComposite &&
+            selectedFeatures.map((name) => {
+              const index = ANCHORED_FEATURE_ORDER.indexOf(name as Exclude<FeatureName, 'LED Lighting'>)
+              if (index === -1) return null
+              return (
+                <ExtraOverlay
+                  key={name}
+                  name={name as Exclude<FeatureName, 'LED Lighting'>}
+                  anchor={FEATURE_ANCHORS[index]}
+                />
+              )
+            })}
         </svg>
+        {compositeStatus === 'loading' && (
+          <div className="absolute bottom-2 right-2 flex items-center gap-1.5 rounded-full bg-slate-900/70 px-2.5 py-1 text-[11px] text-white">
+            <span className="h-2.5 w-2.5 animate-spin rounded-full border-[1.5px] border-white/40 border-t-white" />
+            Enhancing preview…
+          </div>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t bg-white/70 px-4 py-2 text-xs text-slate-500">
