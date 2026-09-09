@@ -6,6 +6,7 @@ const TABS = [
   { label: 'Dealers', path: '/admin/dealers' },
   { label: 'Blog', path: '/admin/blog' },
   { label: 'Pool Photos', path: '/admin/photos' },
+  { label: 'Fun Extras', path: '/admin/extras' },
 ]
 
 export default function AdminNav({ onRefresh }: { onRefresh: () => void }) {
