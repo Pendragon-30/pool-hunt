@@ -7,10 +7,16 @@ import { supabase } from '../lib/supabaseClient'
 // real image, instead of separate sticker images layered on top. See that
 // function for the full architecture note.
 //
-// This hook is deliberately non-blocking and silent on failure: while a
-// composite is loading (or unavailable/rate-limited), the caller just keeps
-// showing whatever it already had -- the existing sticker-based preview --
-// so a slow or failed generation never breaks or blanks the page.
+// This hook is deliberately non-blocking and silent on failure. While a NEW
+// combo is loading, `url` keeps returning the LAST ready composite (if any)
+// rather than clearing immediately -- that stale-but-real photo is a much
+// cleaner thing to keep showing than reverting to the flat sticker overlay
+// every time a selection changes, even though it doesn't yet reflect the
+// newest pick. `status` still flips to 'loading' so the caller can show a
+// small non-blocking indicator on top of it. `url` only goes back to null
+// when no composite is needed at all (status 'idle') or a generation
+// genuinely failed/was rate-limited (status 'unavailable') -- those are the
+// only two states where the caller should fall back to sticker rendering.
 
 export type CompositePhotoParams = {
   poolType: string
@@ -53,13 +59,16 @@ export function useCompositePhoto(params: CompositePhotoParams) {
   useEffect(() => {
     requestIdRef.current += 1
     const thisRequestId = requestIdRef.current
-    setUrl(null)
 
     if (!shouldRequestComposite(params)) {
       setStatus('idle')
+      setUrl(null)
       return
     }
 
+    // Note: intentionally NOT clearing `url` here -- keep showing whatever
+    // composite was last ready (even though it's for the previous combo)
+    // while this new one loads, rather than reverting to nothing.
     setStatus('loading')
 
     const debounceTimer = setTimeout(() => {
@@ -82,6 +91,7 @@ export function useCompositePhoto(params: CompositePhotoParams) {
 
         if (error || !data) {
           setStatus('unavailable')
+          setUrl(null)
           return
         }
 
@@ -98,6 +108,7 @@ export function useCompositePhoto(params: CompositePhotoParams) {
         }
 
         setStatus('unavailable')
+        setUrl(null)
       }
 
       void attempt()

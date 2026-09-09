@@ -18,6 +18,19 @@ const KEY_COLOR = { r: 255, g: 0, b: 255 }
 const HARD_THRESHOLD = 60
 const FEATHER = 50
 
+// What the RGB channel gets blended toward as a pixel's alpha drops to
+// zero. A plain, unsaturated "matte" color -- specifically NOT changing
+// this used to be a real bug: only the alpha channel was ever touched, so a
+// fully keyed-out pixel kept its ORIGINAL magenta RGB value sitting
+// underneath an alpha of 0. That's invisible in a normal browser (which
+// respects alpha), but any downstream consumer that flattens or ignores
+// the alpha channel sees that leftover magenta bleed straight through --
+// which is exactly what was happening when a pool photo's "transparent"
+// background was later fed into Gemini for the composite-photo edit
+// pipeline: Gemini doesn't handle alpha, so it saw the raw (still-magenta)
+// RGB data and reproduced it as a magenta background/border in its output.
+const NEUTRAL_MATTE = { r: 255, g: 255, b: 255 }
+
 function colorDistance(r: number, g: number, b: number): number {
   const dr = r - KEY_COLOR.r
   const dg = g - KEY_COLOR.g
@@ -59,12 +72,24 @@ export async function chromaKeyAndUpload(
   const pixels = imageData.data
   for (let i = 0; i < pixels.length; i += 4) {
     const dist = colorDistance(pixels[i], pixels[i + 1], pixels[i + 2])
+
+    // alphaFactor: 0 = fully keyed out (magenta), 1 = fully kept as-is.
+    let alphaFactor: number
     if (dist < HARD_THRESHOLD) {
-      pixels[i + 3] = 0
+      alphaFactor = 0
     } else if (dist < HARD_THRESHOLD + FEATHER) {
-      const t = (dist - HARD_THRESHOLD) / FEATHER
-      pixels[i + 3] = Math.round(pixels[i + 3] * t)
+      alphaFactor = (dist - HARD_THRESHOLD) / FEATHER
+    } else {
+      alphaFactor = 1
     }
+
+    // Blend RGB toward the neutral matte by the SAME factor used for alpha
+    // -- not just fading alpha while leaving the original (magenta-tinted)
+    // color data sitting underneath it. See NEUTRAL_MATTE above for why.
+    pixels[i] = Math.round(pixels[i] * alphaFactor + NEUTRAL_MATTE.r * (1 - alphaFactor))
+    pixels[i + 1] = Math.round(pixels[i + 1] * alphaFactor + NEUTRAL_MATTE.g * (1 - alphaFactor))
+    pixels[i + 2] = Math.round(pixels[i + 2] * alphaFactor + NEUTRAL_MATTE.b * (1 - alphaFactor))
+    pixels[i + 3] = Math.round(pixels[i + 3] * alphaFactor)
   }
   ctx.putImageData(imageData, 0, 0)
 

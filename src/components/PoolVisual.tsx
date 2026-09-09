@@ -455,7 +455,13 @@ export default function PoolVisual({
     cover: hasCover && cover !== 'undecided' ? cover : 'none',
     extras: extraSlugs,
   })
-  const useComposite = compositeStatus === 'ready' && Boolean(compositeUrl)
+  // Show a composite photo whenever one is available -- including a stale
+  // one for the previous combo while a new one is still generating, which
+  // reads far better than reverting to the sticker overlay on every click.
+  // Stickers are the true, last-resort fallback: they only render when a
+  // generation has actually failed or been rate-limited ('unavailable').
+  const useComposite = Boolean(compositeUrl)
+  const showStickerFallback = compositeStatus === 'unavailable'
 
   const coverLabel =
     cover === 'undecided' ? 'Cover — TBD' : hasCover ? `Cover: ${cover.replace(/_/g, ' ')}` : ''
@@ -491,10 +497,13 @@ export default function PoolVisual({
           className="block aspect-[4/3] w-full object-cover pool-pop-in"
         />
         {/* Everything below is baked directly into the photo once a composite
-            is ready, so the sticker overlays only render as the fallback
-            preview while one isn't (yet) available. LED lighting is the one
-            exception -- it's always a separate code-rendered glow, layered
-            on top either way. */}
+            is ready, so the sticker overlays are strictly a last-resort
+            fallback -- they render only if a composite generation actually
+            failed or was rate-limited, never just while one is loading (a
+            stale-but-real composite from the previous combo stays on screen
+            during that wait instead, via `useComposite`/`compositeUrl`
+            above). LED lighting is the one exception -- it's always a
+            separate code-rendered glow, layered on top either way. */}
         <svg viewBox="0 0 400 300" className="absolute inset-0 h-full w-full" role="presentation">
           <defs>
             {/* Soft grounding shadow under every sticker overlay (extras + cover)
@@ -504,14 +513,14 @@ export default function PoolVisual({
               <feDropShadow dx="0" dy="4" stdDeviation="3.5" floodColor="#0f172a" floodOpacity="0.35" />
             </filter>
           </defs>
-          {!useComposite && hasCover && cover !== 'undecided' && (
+          {showStickerFallback && hasCover && cover !== 'undecided' && (
             <CoverOverlay key={cover} cover={cover} poolType={effectivePoolType} />
           )}
           {/* LED lighting can't show through a cover, so it only renders when the water is visible. */}
           {!hasCover && selectedFeatures.includes('LED Lighting') && (
             <LedLightingGlow poolType={effectivePoolType} />
           )}
-          {!useComposite &&
+          {showStickerFallback &&
             selectedFeatures.map((name) => {
               const index = ANCHORED_FEATURE_ORDER.indexOf(name as Exclude<FeatureName, 'LED Lighting'>)
               if (index === -1) return null
