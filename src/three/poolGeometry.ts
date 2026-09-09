@@ -273,3 +273,28 @@ export function buildFlatOutlineGeometry(points: THREE.Vector2[]): THREE.ShapeGe
   geometry.rotateX(-Math.PI / 2)
   return geometry
 }
+
+// A large circular "grass" plate for the ground around an inground pool,
+// with a rectangular hole cut to match the deck's outer footprint exactly.
+//
+// This matters more than it sounds: the deck plate only covers its own
+// footprint (and has its own hole cut for the pool). A naive full disc for
+// the surrounding ground has to sit a little below the coping so it doesn't
+// float above the deck -- but with no hole of its own, that disc is a solid
+// surface positioned ABOVE the water/floor/walls in world Y (which live
+// further below, down to -INGROUND_DEPTH_FT). Since the camera looks down
+// at the scene, the ground plate is the first opaque surface any ray
+// through the pool hole hits, completely hiding the basin -- the entire
+// pool reads as a flat green disc instead of showing water, walls, or any
+// depth at all, no matter what the camera or lighting is doing. Cutting a
+// hole here removes the plate from underneath the deck+pool entirely, so
+// there is nothing in the way of the actual pool geometry.
+export function buildGroundWithHoleGeometry(outerRadius: number, holeWidth: number, holeLength: number, holeCornerRadius = 2): THREE.ShapeGeometry {
+  const outer = new THREE.Shape()
+  outer.absarc(0, 0, outerRadius, 0, Math.PI * 2, false)
+  const holeShape = roundedRectShape(holeWidth, holeLength, holeCornerRadius)
+  outer.holes.push(new THREE.Path(holeShape.getPoints(48)))
+  const geometry = new THREE.ShapeGeometry(outer, 48)
+  geometry.rotateX(-Math.PI / 2)
+  return geometry
+}

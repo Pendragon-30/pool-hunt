@@ -6,6 +6,7 @@ import {
   INGROUND_DEPTH_FT,
   buildDeckWithHoleGeometry,
   buildFlatOutlineGeometry,
+  buildGroundWithHoleGeometry,
   buildWallStripGeometry,
   getAboveGroundOutlineShape,
   getInGroundOutlineShape,
@@ -109,13 +110,15 @@ function buildInGroundScene(shape: InGroundShapeId, construction: ConstructionId
   deck.receiveShadow = true
   group.add(deck)
 
-  // A little grass peeking out beyond the deck for context.
+  // A little grass peeking out beyond the deck for context. Cut with a hole
+  // matching the deck's own outer footprint (see buildGroundWithHoleGeometry)
+  // so this plate never sits in front of the basin itself -- a plain disc
+  // here previously hid the entire pool interior behind flat green ground.
   const groundRadius = Math.max(deckOuterWidth, deckOuterLength) * 0.85
   const ground = new THREE.Mesh(
-    new THREE.CircleGeometry(groundRadius, 48),
+    buildGroundWithHoleGeometry(groundRadius, deckOuterWidth, deckOuterLength, 2.5),
     new THREE.MeshStandardMaterial({ color: '#7fac68', roughness: 1 }),
   )
-  ground.rotation.x = -Math.PI / 2
   ground.position.y = -0.05
   ground.receiveShadow = true
   group.add(ground)
