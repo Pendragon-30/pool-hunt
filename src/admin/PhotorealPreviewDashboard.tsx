@@ -72,7 +72,10 @@ const EXTRA_DESCRIPTIONS: Record<ExtraSlug, string> = {
   natural_slide: 'a natural rock-style pool slide',
   water_feature: 'a laminar deck-jet water feature at the pool edge',
   swim_up_bar: 'a swim-up bar with underwater stools, right at the pool edge',
-  tanning_ledge: 'a shallow tanning ledge with loungers on it, at the pool edge',
+  tanning_ledge:
+    'a raised tanning ledge/Baja shelf built above and overlapping the main pool, with a shallow layer of water ' +
+    'and loungers on it, and a visible infinity edge where its water spills down into the main pool just below -- ' +
+    'NOT a shelf flush with the main pool at the same water level',
   diving_board: 'a diving board at one end of the pool',
   hot_tub_spa_combo:
     'a raised spa built directly into and attached to the main pool at one corner, sharing a wall with the pool ' +

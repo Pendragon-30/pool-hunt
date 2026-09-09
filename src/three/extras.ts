@@ -83,22 +83,24 @@ const EXTRA_ZONE_DEGREES: Record<ExtraSlug, number> = {
   natural_slide: 315,
 }
 
-// A swim-up bar's counter and a tanning ledge's shelf are meant to sit
-// right at the pool's edge (people swim up to one, the other is really a
-// shallow shelf at the waterline) -- pull those in much closer than the
-// freestanding structures like a slide, diving board, waterfall, or
-// natural slide, which belong out on the open deck instead of crowding the
-// coping. "Hot tub / spa combo" belongs in this close-in group too, NOT
-// with the freestanding structures: a "hot tub / spa combo" is meant to
-// read as a raised spa built directly into the pool structure -- sharing a
-// wall with the pool, water spilling over from the spa into the main
-// pool -- not a separate portable hot tub someone dropped nearby. Pulling
-// it in almost to the coping (rather than out on the open deck like a
-// slide or diving board needs to be) is what makes that connected, built-in
-// reading possible in both the 3D guide and the photoreal repaint.
+// A swim-up bar's counter is meant to sit right at the pool's edge (people
+// swim up to it) -- pull it in much closer than the freestanding
+// structures like a slide, diving board, waterfall, or natural slide,
+// which belong out on the open deck instead of crowding the coping.
+// "Hot tub / spa combo" and "tanning ledge" belong in this close-in group
+// too, NOT with the freestanding structures, and pulled in even tighter
+// than the swim-up bar -- both are meant to read as raised structures
+// built directly onto/over the pool itself (sharing a wall with it, or in
+// the tanning ledge's case cantilevered above its water), not something
+// standing apart on the deck. Pulling them in almost to the coping (rather
+// than out on the open deck like a slide or diving board needs to be) is
+// what makes that connected, built-in reading possible in both the 3D
+// guide and the photoreal repaint -- see buildHotTubSpaComboGroup's own
+// spillway and buildTanningLedgeGroup's infinity edge below for the other
+// half of that reading.
 const EXTRA_RING_OFFSET_SCALE: Partial<Record<ExtraSlug, number>> = {
   swim_up_bar: 0.15,
-  tanning_ledge: 0.2,
+  tanning_ledge: 0.08,
   hot_tub_spa_combo: 0.08,
 }
 
@@ -464,22 +466,72 @@ function loungerGroup(): THREE.Group {
   return group
 }
 
+// A raised tanning ledge / Baja shelf with an infinity edge -- sits above
+// and overlaps the main pool itself (the tight EXTRA_RING_OFFSET_SCALE
+// entry above pulls it almost to the coping, the same treatment the hot
+// tub/spa combo gets) rather than sitting as a separate flat platform out
+// on the open deck. The shelf's own shallow water sits a few inches above
+// the main pool's waterline (TANNING_LEDGE_MAIN_POOL_WATER_Y below matches
+// INGROUND_WATER_Y in buildScene.ts, -0.2), and a sheet of water spills
+// over its near (-Z, pool-facing) edge and down to the main pool's water
+// level -- an "infinity entry," the same literal-spillway device
+// buildHotTubSpaComboGroup uses so this reads as one connected structure
+// built over the pool rather than a lounging pad set off to the side at
+// the same water level.
+//
+// Like buildHotTubSpaComboGroup's own spillway, these Y values are tuned
+// against the INGROUND main pool's water line specifically, not threaded
+// through per pool type -- the same simplification already accepted for
+// the hot tub. An above-ground pool's water sits much higher (inside its
+// raised wall, see ABOVE_GROUND_WATER_Y_MARGIN in buildScene.ts), so a
+// tanning ledge on an above-ground pool won't visually reach that higher
+// water line either; a raised infinity-edge shelf isn't a real
+// above-ground pool product anyway, so this isn't worth the added
+// complexity of passing pool-type context into every accessory builder
+// for a combination that's already an edge case.
+const TANNING_LEDGE_WATER_Y = 0.1
+const TANNING_LEDGE_MAIN_POOL_WATER_Y = -0.2
+
 export function buildTanningLedgeGroup(): THREE.Group {
   const group = new THREE.Group()
   const material = new THREE.MeshStandardMaterial({ color: '#cfe6ee', roughness: 0.35 })
-  const ledge = new THREE.Mesh(new THREE.BoxGeometry(7, 0.35, 4.5), material)
-  ledge.position.set(0, 0.17, -0.5)
+
+  const slabThickness = 0.35
+  const slabY = TANNING_LEDGE_WATER_Y - 0.03 - slabThickness / 2
+  const ledge = new THREE.Mesh(new THREE.BoxGeometry(7, slabThickness, 4.5), material)
+  ledge.position.set(0, slabY, -0.5)
   group.add(ledge)
+
   const shallowWater = new THREE.Mesh(new THREE.BoxGeometry(6.6, 0.06, 4.1), getWaterMaterial())
-  shallowWater.position.set(0, 0.38, -0.5)
+  shallowWater.position.set(0, TANNING_LEDGE_WATER_Y, -0.5)
   group.add(shallowWater)
 
+  // The infinity-edge spillway: a sheet of water running down the
+  // shelf's near (-Z, pool-facing) edge, from the shelf's own water line
+  // down to just past the main pool's water surface, so the two visibly
+  // connect instead of the shelf appearing to float independently above
+  // the pool.
+  const spillwayHeight = TANNING_LEDGE_WATER_Y - TANNING_LEDGE_MAIN_POOL_WATER_Y + 0.1
+  const spillwayY = (TANNING_LEDGE_WATER_Y + TANNING_LEDGE_MAIN_POOL_WATER_Y) / 2
+  const spillway = new THREE.Mesh(new THREE.PlaneGeometry(6.2, spillwayHeight), getWaterMaterial())
+  spillway.position.set(0, spillwayY, -0.5 - 4.1 / 2 + 0.05)
+  spillway.rotation.x = -0.1
+  group.add(spillway)
+
+  // A thin coping cap along the infinity edge -- without a real physical
+  // edge to spill over, the water sheet below would read as starting
+  // mid-air instead of spilling over the shelf's own rim.
+  const capMaterial = new THREE.MeshStandardMaterial({ color: '#e2e5e8', roughness: 0.4 })
+  const cap = new THREE.Mesh(new THREE.BoxGeometry(6.6, 0.06, 0.2), capMaterial)
+  cap.position.set(0, TANNING_LEDGE_WATER_Y + 0.02, -0.5 - 4.1 / 2)
+  group.add(cap)
+
   const loungerA = loungerGroup()
-  loungerA.position.set(-2, 0.38, -0.5)
+  loungerA.position.set(-2, TANNING_LEDGE_WATER_Y, -0.5)
   loungerA.rotation.y = Math.PI / 2
   group.add(loungerA)
   const loungerB = loungerGroup()
-  loungerB.position.set(1.6, 0.38, -0.5)
+  loungerB.position.set(1.6, TANNING_LEDGE_WATER_Y, -0.5)
   loungerB.rotation.y = Math.PI / 2
   group.add(loungerB)
 
