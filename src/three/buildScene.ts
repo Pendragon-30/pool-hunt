@@ -58,8 +58,16 @@ export type BuiltScene = {
   sceneRadius: number
 }
 
-const FOV_DEGREES = 32
-const CAMERA_ELEVATION_DEG = 38
+// A lower elevation and wider field of view than the first pass -- the
+// original 38 degrees / 32mm-equivalent framing, combined with generous
+// padding around the footprint, put the camera so far away and so nearly
+// overhead that the scene read as a flat top-down map: a 4-5ft-tall
+// accessory or a 4.5ft-deep basin barely registers against a 30-50ft-wide
+// deck from that far up. Standing the camera closer to eye level and
+// zooming in tighter makes the same real-world height differences occupy
+// much more of the frame.
+const FOV_DEGREES = 42
+const CAMERA_ELEVATION_DEG = 26
 const CAMERA_AZIMUTH_DEG = 35
 
 function buildInGroundScene(shape: InGroundShapeId, construction: ConstructionId, cover: string, extras: ExtraSlug[], ledLighting: boolean): THREE.Group {
@@ -231,8 +239,11 @@ export function buildPoolScene(config: PoolSceneConfig): BuiltScene {
   const footprint = getSceneFootprint(config.poolType, config.shape)
   // Extras extend a few feet beyond the pool+deck footprint, so pad the
   // framing radius a bit further out than the bare footprint would need,
-  // keeping every combination comfortably inside the frame.
-  const boundingRadius = Math.hypot(footprint.width / 2, footprint.length / 2) * 1.2 + (config.extras.length > 0 ? 3 : 0)
+  // keeping every combination comfortably inside the frame -- but only
+  // just enough, since every extra foot of padding here is an extra foot
+  // of "zoomed out," which is exactly what was making everything look
+  // small and flat.
+  const boundingRadius = Math.hypot(footprint.width / 2, footprint.length / 2) * 1.05 + (config.extras.length > 0 ? 1.5 : 0)
   const fovRad = THREE.MathUtils.degToRad(FOV_DEGREES)
   const cameraDistance = boundingRadius / Math.sin(fovRad / 2)
 

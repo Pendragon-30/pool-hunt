@@ -31,7 +31,16 @@ function seededRandom(seed: number): () => number {
 // A soft speckled/pebbled texture -- used for concrete/gunite's pebble
 // finish, and (with a lighter, greyer palette) for the poured-concrete
 // deck around every inground pool.
-function createSpeckleTexture(baseColor: string, speckleColor: string, seed: number): THREE.CanvasTexture {
+//
+// IMPORTANT: THREE.ShapeGeometry (and the hand-built wall strip) normalize
+// UVs to a plain 0-1 range across the WHOLE surface regardless of its real
+// footprint -- so a 256px canvas of fine speckles, left at the default
+// repeat of (1, 1), gets stretched exactly once across an entire 30-50ft
+// deck. At that scale every speckle anti-aliases down to nothing and the
+// surface reads as a single flat, texture-less color, no matter how good
+// the lighting is. `repeatX`/`repeatY` force it to actually tile at a
+// scale where the speckles stay visible.
+function createSpeckleTexture(baseColor: string, speckleColor: string, seed: number, repeatX: number, repeatY: number): THREE.CanvasTexture {
   const size = 256
   const { canvas, ctx } = createCanvas(size)
   ctx.fillStyle = baseColor
@@ -51,13 +60,16 @@ function createSpeckleTexture(baseColor: string, speckleColor: string, seed: num
   const texture = new THREE.CanvasTexture(canvas)
   texture.wrapS = THREE.RepeatWrapping
   texture.wrapT = THREE.RepeatWrapping
+  texture.repeat.set(repeatX, repeatY)
   texture.colorSpace = THREE.SRGBColorSpace
   return texture
 }
 
 // A subtle grid of seam lines -- vinyl liners are installed in panels with
 // visible seams every few feet, which is the one visual cue that reads as
-// "vinyl" rather than a plain painted surface.
+// "vinyl" rather than a plain painted surface. See the repeat note above --
+// same reasoning, tuned looser since liner panels are meant to read as a
+// handful of large sections rather than a fine tiled pattern.
 function createLinerSeamTexture(): THREE.CanvasTexture {
   const size = 256
   const { canvas, ctx } = createCanvas(size)
@@ -79,6 +91,7 @@ function createLinerSeamTexture(): THREE.CanvasTexture {
   const texture = new THREE.CanvasTexture(canvas)
   texture.wrapS = THREE.RepeatWrapping
   texture.wrapT = THREE.RepeatWrapping
+  texture.repeat.set(8, 3)
   texture.colorSpace = THREE.SRGBColorSpace
   return texture
 }
@@ -101,6 +114,7 @@ function createPanelTexture(): THREE.CanvasTexture {
   const texture = new THREE.CanvasTexture(canvas)
   texture.wrapS = THREE.RepeatWrapping
   texture.wrapT = THREE.RepeatWrapping
+  texture.repeat.set(6, 2)
   texture.colorSpace = THREE.SRGBColorSpace
   return texture
 }
@@ -138,7 +152,7 @@ export function getConstructionMaterial(construction: ConstructionId): THREE.Mat
       break
     case 'concrete_gunite':
       material = new THREE.MeshStandardMaterial({
-        map: createSpeckleTexture('#5b6b74', '#38464e', 7),
+        map: createSpeckleTexture('#5b6b74', '#38464e', 7, 10, 6),
         roughness: 0.85,
         metalness: 0,
         side: THREE.DoubleSide,
@@ -152,7 +166,7 @@ export function getConstructionMaterial(construction: ConstructionId): THREE.Mat
 export function getDeckMaterial(): THREE.Material {
   if (cachedDeckMaterial) return cachedDeckMaterial
   cachedDeckMaterial = new THREE.MeshStandardMaterial({
-    map: createSpeckleTexture('#d9d5cc', '#b8b2a4', 3),
+    map: createSpeckleTexture('#d9d5cc', '#b8b2a4', 3, 16, 16),
     roughness: 0.9,
     metalness: 0,
     side: THREE.DoubleSide,

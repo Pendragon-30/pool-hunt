@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import * as THREE from 'three'
-import { buildPoolScene, type PoolSceneConfig } from './buildScene'
+import { FOV_DEGREES, buildPoolScene, type PoolSceneConfig } from './buildScene'
 
 // A minimal stand-in "room" to bake into an environment map (see
 // buildStudioEnvironmentScene below) -- built from only core three.js
@@ -97,7 +97,7 @@ export default function PoolScene(props: PoolSceneProps) {
       shadows
       dpr={[1, 2]}
       gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.05 }}
-      camera={{ fov: 32, near: 0.5, far: 500, position: [camX, camY, camZ] }}
+      camera={{ fov: FOV_DEGREES, near: 0.5, far: 500, position: [camX, camY, camZ] }}
       onCreated={(state) => {
         state.camera.lookAt(cameraTarget)
         state.scene.background = new THREE.Color('#eaf6fb')
