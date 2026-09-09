@@ -2,12 +2,26 @@ import * as THREE from 'three'
 import { getWaterMaterial } from './materials'
 
 // Every accessory below is a small assembly of plain THREE.js primitives
-// (boxes, cylinders, cones, an icosahedron or two for "rock" clusters),
-// built imperatively and returned as a THREE.Group rather than JSX -- that
-// sidesteps any question of whether react-three-fiber's JSX intrinsics are
-// wired up correctly in this particular file, which matters a lot given
-// none of this can be compiled or rendered before it reaches the user's
-// own machine. PoolScene.tsx mounts each group with a plain <primitive object={...} />.
+// (boxes, cylinders, cones, torii, and perturbed icosahedra for "rock"
+// clusters), built imperatively and returned as a THREE.Group rather than
+// JSX -- that sidesteps any question of whether react-three-fiber's JSX
+// intrinsics are wired up correctly in this particular file, which matters
+// a lot given none of this can be compiled or rendered before it reaches
+// the user's own machine. PoolScene.tsx mounts each group with a plain
+// <primitive object={...} />.
+//
+// This file went through a second pass focused specifically on realism:
+// the first version used very low segment counts (6-10) on every rounded
+// shape, which reads as faceted/geometric rather than smooth, and left
+// accessories as bare primitives with no distinguishing texture or
+// supporting detail (a plain cylinder for a hot tub, a bare curved slab for
+// a swim-up bar). This pass raises segment counts across the board, adds
+// small canvas-texture materials (wood grain, thatch) so surfaces aren't
+// flat single colors, and adds the small structural/contextual details
+// (a hot tub rim + control panel, a bar's canopy roof, loungers on the
+// tanning ledge, support posts under the slide) that make an accessory
+// legible as the real object instead of an abstract shape standing in
+// for it.
 //
 // Each group is built in its own local space with the convention "local
 // -Z points toward the pool" (e.g. a slide's chute descends toward -Z, a
@@ -60,16 +74,147 @@ export function getSlotPlacement(index: number, footprintWidth: number, footprin
   return { x, z, rotationY }
 }
 
-function rockCluster(count: number, baseRadius: number, color: string): THREE.Group {
+// --- shared small helpers -------------------------------------------------
+
+function seededRandom(seed: number): () => number {
+  let s = seed % 2147483647
+  if (s <= 0) s += 2147483646
+  return () => {
+    s = (s * 16807) % 2147483647
+    return (s - 1) / 2147483646
+  }
+}
+
+function createCanvas(size: number): { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D } {
+  const canvas = document.createElement('canvas')
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('2D canvas context unavailable')
+  return { canvas, ctx }
+}
+
+// A loose, slightly wavy wood-plank texture -- used for the hot tub shell
+// and the swim-up bar's counter/posts. Not a photographic wood texture (no
+// image assets are loaded from anywhere), but the wavy grain lines and
+// plank-width color banding are what separate "wood" from "flat brown
+// plastic" at a glance.
+function createWoodTexture(baseColor: string, grainColor: string, seed: number): THREE.CanvasTexture {
+  const size = 256
+  const { canvas, ctx } = createCanvas(size)
+  ctx.fillStyle = baseColor
+  ctx.fillRect(0, 0, size, size)
+  const rand = seededRandom(seed)
+  ctx.strokeStyle = grainColor
+  for (let i = 0; i < 20; i++) {
+    const y = rand() * size
+    ctx.globalAlpha = 0.12 + rand() * 0.28
+    ctx.lineWidth = 1 + rand() * 2
+    ctx.beginPath()
+    ctx.moveTo(0, y)
+    for (let x = 0; x <= size; x += 16) {
+      ctx.lineTo(x, y + Math.sin(x * 0.05 + i) * 3 + (rand() - 0.5) * 4)
+    }
+    ctx.stroke()
+  }
+  ctx.globalAlpha = 1
+  const texture = new THREE.CanvasTexture(canvas)
+  texture.wrapS = THREE.RepeatWrapping
+  texture.wrapT = THREE.RepeatWrapping
+  texture.colorSpace = THREE.SRGBColorSpace
+  return texture
+}
+
+let cachedHotTubWoodTexture: THREE.CanvasTexture | null = null
+function getHotTubWoodTexture(): THREE.CanvasTexture {
+  if (!cachedHotTubWoodTexture) {
+    cachedHotTubWoodTexture = createWoodTexture('#6b4c33', '#4a3322', 11)
+    cachedHotTubWoodTexture.repeat.set(6, 1)
+  }
+  return cachedHotTubWoodTexture
+}
+
+let cachedBarWoodTexture: THREE.CanvasTexture | null = null
+function getBarWoodTexture(): THREE.CanvasTexture {
+  if (!cachedBarWoodTexture) {
+    cachedBarWoodTexture = createWoodTexture('#c9a06b', '#8a6a3f', 23)
+    cachedBarWoodTexture.repeat.set(3, 1)
+  }
+  return cachedBarWoodTexture
+}
+
+let cachedThatchTexture: THREE.CanvasTexture | null = null
+function getThatchTexture(): THREE.CanvasTexture {
+  if (!cachedThatchTexture) {
+    const size = 256
+    const { canvas, ctx } = createCanvas(size)
+    ctx.fillStyle = '#c4a355'
+    ctx.fillRect(0, 0, size, size)
+    const rand = seededRandom(31)
+    ctx.strokeStyle = '#a8853c'
+    for (let i = 0; i < 70; i++) {
+      const x = rand() * size
+      ctx.globalAlpha = 0.15 + rand() * 0.3
+      ctx.lineWidth = 1 + rand()
+      ctx.beginPath()
+      ctx.moveTo(x, 0)
+      ctx.lineTo(x + (rand() - 0.5) * 10, size)
+      ctx.stroke()
+    }
+    ctx.globalAlpha = 1
+    cachedThatchTexture = new THREE.CanvasTexture(canvas)
+    cachedThatchTexture.wrapS = THREE.RepeatWrapping
+    cachedThatchTexture.wrapT = THREE.RepeatWrapping
+    cachedThatchTexture.repeat.set(6, 3)
+    cachedThatchTexture.colorSpace = THREE.SRGBColorSpace
+  }
+  return cachedThatchTexture
+}
+
+// Displaces every vertex of a subdivided icosahedron outward or inward by a
+// small deterministic random amount along its own normal. A bare
+// IcosahedronGeometry(radius, 0) is a perfectly regular 20-sided gem --
+// recognizably "low-poly toy," not "rock." Jittering the vertices (seeded,
+// so a given rock's shape never changes between renders) turns the same
+// primitive into something with the irregular, lumpy silhouette that
+// actually reads as stone.
+function perturbedRockGeometry(radius: number, seed: number, roughnessAmount = 0.4): THREE.BufferGeometry {
+  const geometry = new THREE.IcosahedronGeometry(radius, 1)
+  const rand = seededRandom(seed)
+  const position = geometry.attributes.position
+  const vertex = new THREE.Vector3()
+  for (let i = 0; i < position.count; i++) {
+    vertex.fromBufferAttribute(position, i)
+    const offset = 1 + (rand() - 0.5) * roughnessAmount
+    vertex.multiplyScalar(offset)
+    position.setXYZ(i, vertex.x, vertex.y, vertex.z)
+  }
+  position.needsUpdate = true
+  geometry.computeVertexNormals()
+  return geometry
+}
+
+// A loose cluster of perturbed "rocks" with per-rock size, color, rotation,
+// and placement jitter (all seeded, so it's deterministic) -- used for the
+// natural slide's rock face, the water feature, and the waterfall.
+function rockCluster(count: number, baseRadius: number, color: string, seedBase: number): THREE.Group {
   const group = new THREE.Group()
-  const material = new THREE.MeshStandardMaterial({ color, roughness: 0.95, metalness: 0 })
+  const rand = seededRandom(seedBase * 97 + 13)
+  const baseColor = new THREE.Color(color)
   for (let i = 0; i < count; i++) {
-    const radius = baseRadius * (0.6 + 0.4 * ((i * 37) % 7) / 6)
-    const geometry = new THREE.IcosahedronGeometry(radius, 0)
+    const radius = baseRadius * (0.55 + rand() * 0.55)
+    const geometry = perturbedRockGeometry(radius, seedBase * 131 + i * 17 + 1)
+    const tint = 0.82 + rand() * 0.36
+    const material = new THREE.MeshStandardMaterial({
+      color: baseColor.clone().multiplyScalar(tint),
+      roughness: 0.9 + rand() * 0.08,
+      metalness: 0,
+    })
     const mesh = new THREE.Mesh(geometry, material)
-    const angle = (i / count) * Math.PI * 2
-    mesh.position.set(Math.cos(angle) * baseRadius * 0.5, radius * 0.55, Math.sin(angle) * baseRadius * 0.5)
-    mesh.rotation.set(i * 0.7, i * 1.3, i * 0.4)
+    const angle = (i / count) * Math.PI * 2 + rand() * 0.6
+    const dist = baseRadius * (0.3 + rand() * 0.4)
+    mesh.position.set(Math.cos(angle) * dist, radius * (0.4 + rand() * 0.25), Math.sin(angle) * dist)
+    mesh.rotation.set(rand() * Math.PI, rand() * Math.PI, rand() * Math.PI)
     group.add(mesh)
   }
   return group
@@ -79,12 +224,12 @@ function ladderRails(height: number): THREE.Group {
   const group = new THREE.Group()
   const material = new THREE.MeshStandardMaterial({ color: '#e5e9ec', roughness: 0.4, metalness: 0.6 })
   for (const side of [-1, 1]) {
-    const rail = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, height, 8), material)
+    const rail = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, height, 12), material)
     rail.position.set(side * 0.7, height / 2, 0)
     group.add(rail)
   }
   for (let i = 1; i < Math.floor(height); i++) {
-    const rung = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.4, 6), material)
+    const rung = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.4, 10), material)
     rung.rotation.z = Math.PI / 2
     rung.position.set(0, i, 0)
     group.add(rung)
@@ -108,28 +253,50 @@ function slideChute(color: string): THREE.Mesh {
     new THREE.Vector3(0, 0.2, -4.1),
   ]
   const curve = new THREE.CatmullRomCurve3(points, false, 'centripetal')
-  const geometry = new THREE.TubeGeometry(curve, 32, 0.55, 10, false)
-  const material = new THREE.MeshStandardMaterial({ color, roughness: 0.3, metalness: 0.05, side: THREE.DoubleSide })
+  const geometry = new THREE.TubeGeometry(curve, 40, 0.55, 16, false)
+  const material = new THREE.MeshStandardMaterial({ color, roughness: 0.25, metalness: 0.05, side: THREE.DoubleSide })
   return new THREE.Mesh(geometry, material)
+}
+
+// A pair of diagonal support posts under the elevated middle section of the
+// slide -- without them the raised run of tube reads as floating in
+// mid-air, which is one of the fastest ways an otherwise-decent model reads
+// as "not real."
+function slideSupportPosts(): THREE.Group {
+  const group = new THREE.Group()
+  const material = new THREE.MeshStandardMaterial({ color: '#c7ccd1', roughness: 0.5, metalness: 0.3 })
+  const posts: [number, number, number][] = [
+    [0.5, 1.7, -1.3],
+    [-0.5, 1.7, -1.3],
+    [0.45, 1.0, -2.7],
+    [-0.45, 1.0, -2.7],
+  ]
+  for (const [x, h, z] of posts) {
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, h, 10), material)
+    post.position.set(x, h / 2, z)
+    group.add(post)
+  }
+  return group
 }
 
 export function buildSlideGroup(): THREE.Group {
   const group = new THREE.Group()
   group.add(ladderRails(4.6))
   group.add(slideChute('#3aa0d1'))
+  group.add(slideSupportPosts())
   return group
 }
 
 export function buildNaturalSlideGroup(): THREE.Group {
   const group = new THREE.Group()
   group.add(slideChute('#8a7a63'))
-  const rocks = rockCluster(6, 1.3, '#7d7466')
+  const rocks = rockCluster(7, 1.3, '#7d7466', 3)
   rocks.position.set(0, 0, -1.5)
   group.add(rocks)
   // A few small "foliage" accents along the rock face.
   const leafMaterial = new THREE.MeshStandardMaterial({ color: '#4c7a3f', roughness: 0.9 })
   for (let i = 0; i < 4; i++) {
-    const leaf = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.9, 6), leafMaterial)
+    const leaf = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.9, 10), leafMaterial)
     leaf.position.set(0.8 - i * 0.5, 0.45, -0.5 - i * 0.6)
     group.add(leaf)
   }
@@ -138,7 +305,7 @@ export function buildNaturalSlideGroup(): THREE.Group {
 
 export function buildWaterFeatureGroup(): THREE.Group {
   const group = new THREE.Group()
-  const rocks = rockCluster(5, 1.1, '#7d7466')
+  const rocks = rockCluster(6, 1.1, '#7d7466', 5)
   group.add(rocks)
   const jetMaterial = new THREE.MeshPhysicalMaterial({
     color: '#8fdcf5',
@@ -147,7 +314,7 @@ export function buildWaterFeatureGroup(): THREE.Group {
     roughness: 0.1,
     transmission: 0.4,
   })
-  const jet = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.14, 2.2, 8), jetMaterial)
+  const jet = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.14, 2.2, 12), jetMaterial)
   jet.position.set(0, 1.9, 0)
   group.add(jet)
   return group
@@ -155,67 +322,150 @@ export function buildWaterFeatureGroup(): THREE.Group {
 
 export function buildSwimUpBarGroup(): THREE.Group {
   const group = new THREE.Group()
-  const counterMaterial = new THREE.MeshStandardMaterial({ color: '#b98a52', roughness: 0.6 })
-  const counter = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 2.6, 0.25, 16, 1, false, 0, Math.PI), counterMaterial)
+  const counterMaterial = new THREE.MeshStandardMaterial({ map: getBarWoodTexture(), roughness: 0.55, metalness: 0 })
+  const counter = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 2.6, 0.25, 32, 1, false, 0, Math.PI), counterMaterial)
   counter.position.set(0, 3.1, 0)
   group.add(counter)
+  // A thin darker edge band so the counter reads as having real thickness
+  // rather than a paper-flat disc.
+  const edgeMaterial = new THREE.MeshStandardMaterial({ color: '#5c4227', roughness: 0.6 })
+  const edge = new THREE.Mesh(new THREE.TorusGeometry(2.6, 0.06, 8, 32, Math.PI), edgeMaterial)
+  edge.rotation.x = Math.PI / 2
+  edge.position.set(0, 2.97, 0)
+  group.add(edge)
+
+  const postMaterial = new THREE.MeshStandardMaterial({ color: '#c9a06b', roughness: 0.6 })
   for (const side of [-1.6, 0, 1.6]) {
-    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 3.1, 8), counterMaterial)
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 3.1, 12), postMaterial)
     post.position.set(side, 1.55, 1.5)
     group.add(post)
   }
+
+  // A simple thatch-style canopy roof -- the single strongest visual cue
+  // that reads as "swim-up bar" rather than an ambiguous curved counter.
+  const roofMaterial = new THREE.MeshStandardMaterial({ map: getThatchTexture(), roughness: 0.95 })
+  const roof = new THREE.Mesh(new THREE.ConeGeometry(3.1, 1.6, 12), roofMaterial)
+  roof.position.set(0, 4.4, 0.6)
+  group.add(roof)
+
   const stoolMaterial = new THREE.MeshStandardMaterial({ color: '#d8d3c8', roughness: 0.7 })
   for (const side of [-1.4, 0, 1.4]) {
-    const seat = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.15, 12), stoolMaterial)
+    const seat = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.15, 16), stoolMaterial)
     seat.position.set(side, 2.2, 2.4)
     group.add(seat)
-    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 2.2, 8), stoolMaterial)
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 2.2, 10), stoolMaterial)
     leg.position.set(side, 1.1, 2.4)
     group.add(leg)
   }
   return group
 }
 
+// A single pool lounger -- reused twice on the tanning ledge. Gives the
+// flat platform an obvious purpose and a familiar, recognizable silhouette
+// at a glance instead of reading as an unexplained pale slab.
+function loungerGroup(): THREE.Group {
+  const group = new THREE.Group()
+  const strapMaterial = new THREE.MeshStandardMaterial({ color: '#4a90a4', roughness: 0.6 })
+  const frameMaterial = new THREE.MeshStandardMaterial({ color: '#e8e4d8', roughness: 0.5 })
+  const seat = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.08, 1.6), strapMaterial)
+  seat.position.set(0, 0.42, 0.2)
+  group.add(seat)
+  const backrest = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.08, 0.9), strapMaterial)
+  backrest.position.set(0, 0.6, -0.75)
+  backrest.rotation.x = -0.55
+  group.add(backrest)
+  for (const lx of [-0.4, 0.4]) {
+    for (const lz of [-0.5, 0.7]) {
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.4, 8), frameMaterial)
+      leg.position.set(lx, 0.2, lz)
+      group.add(leg)
+    }
+  }
+  return group
+}
+
 export function buildTanningLedgeGroup(): THREE.Group {
   const group = new THREE.Group()
-  const material = new THREE.MeshStandardMaterial({ color: '#bfe0ea', roughness: 0.3 })
+  const material = new THREE.MeshStandardMaterial({ color: '#cfe6ee', roughness: 0.35 })
   const ledge = new THREE.Mesh(new THREE.BoxGeometry(7, 0.35, 4.5), material)
   ledge.position.set(0, 0.17, -0.5)
   group.add(ledge)
   const shallowWater = new THREE.Mesh(new THREE.BoxGeometry(6.6, 0.06, 4.1), getWaterMaterial())
   shallowWater.position.set(0, 0.38, -0.5)
   group.add(shallowWater)
+
+  const loungerA = loungerGroup()
+  loungerA.position.set(-2, 0.38, -0.5)
+  loungerA.rotation.y = Math.PI / 2
+  group.add(loungerA)
+  const loungerB = loungerGroup()
+  loungerB.position.set(1.6, 0.38, -0.5)
+  loungerB.rotation.y = Math.PI / 2
+  group.add(loungerB)
+
   return group
 }
 
 export function buildDivingBoardGroup(): THREE.Group {
   const group = new THREE.Group()
+  const baseMaterial = new THREE.MeshStandardMaterial({ color: '#c7ccd1', roughness: 0.5, metalness: 0.3 })
+  const base = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.4, 1.6), baseMaterial)
+  base.position.set(0, 0.2, 0.8)
+  group.add(base)
+
   const postMaterial = new THREE.MeshStandardMaterial({ color: '#d9dde0', roughness: 0.4, metalness: 0.4 })
-  const post = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 3, 10), postMaterial)
-  post.position.set(0, 1.5, 0.8)
+  const post = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 3, 16), postMaterial)
+  post.position.set(0, 1.9, 0.8)
   group.add(post)
-  const boardMaterial = new THREE.MeshStandardMaterial({ color: '#3f9bd6', roughness: 0.35 })
+
+  const boardMaterial = new THREE.MeshStandardMaterial({ color: '#3f9bd6', roughness: 0.4 })
   const board = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.12, 8), boardMaterial)
-  board.position.set(0, 3, -2.2)
+  board.position.set(0, 3.4, -2.2)
   group.add(board)
+
+  // A thin non-slip grip strip down the board's top face.
+  const gripMaterial = new THREE.MeshStandardMaterial({ color: '#2c6f97', roughness: 0.9 })
+  const grip = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.02, 7.4), gripMaterial)
+  grip.position.set(0, 3.47, -2.2)
+  group.add(grip)
+
   return group
 }
 
 export function buildHotTubSpaComboGroup(): THREE.Group {
   const group = new THREE.Group()
-  const shellMaterial = new THREE.MeshStandardMaterial({ color: '#5b4a3a', roughness: 0.6 })
-  const shell = new THREE.Mesh(new THREE.CylinderGeometry(3.2, 3.2, 2.3, 8), shellMaterial)
-  shell.position.set(0, 1.15, 0)
+  const segments = 24
+  const shellMaterial = new THREE.MeshStandardMaterial({ map: getHotTubWoodTexture(), roughness: 0.65, metalness: 0 })
+  const shell = new THREE.Mesh(new THREE.CylinderGeometry(3.2, 3.2, 2.1, segments), shellMaterial)
+  shell.position.set(0, 1.05, 0)
   group.add(shell)
-  const waterCap = new THREE.Mesh(new THREE.CylinderGeometry(2.7, 2.7, 0.1, 8), getWaterMaterial())
-  waterCap.position.set(0, 2.32, 0)
+
+  // A raised rim gives the top edge real thickness instead of a knife-edge
+  // cylinder cap -- one of the biggest cues that separates "actual object"
+  // from "flat cutout."
+  const rimMaterial = new THREE.MeshStandardMaterial({ color: '#3c3630', roughness: 0.5 })
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(3.2, 0.18, 12, segments), rimMaterial)
+  rim.rotation.x = Math.PI / 2
+  rim.position.set(0, 2.12, 0)
+  group.add(rim)
+
+  const waterCap = new THREE.Mesh(new THREE.CylinderGeometry(2.85, 2.85, 0.1, segments), getWaterMaterial())
+  waterCap.position.set(0, 2.05, 0)
   group.add(waterCap)
+
+  // A small control panel on the side -- one of the most recognizable
+  // hot-tub details at a glance.
+  const panelMaterial = new THREE.MeshStandardMaterial({ color: '#2b2b2e', roughness: 0.3, metalness: 0.3 })
+  const panel = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.5, 0.7), panelMaterial)
+  panel.position.set(3.28, 1.5, 0)
+  group.add(panel)
+
   return group
 }
 
 export function buildWaterfallGroup(): THREE.Group {
   const group = new THREE.Group()
-  const rocks = rockCluster(7, 1.8, '#71685b')
+  const rocks = rockCluster(8, 1.8, '#71685b', 7)
   rocks.position.set(0, 0.6, 0)
   group.add(rocks)
   const sheet = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 3.2), getWaterMaterial())
@@ -256,7 +506,7 @@ export function buildExtraGroup(slug: ExtraSlug): THREE.Group {
 export function buildLedLightingGlow(worldOutline: { x: number; z: number }[], waterY: number): THREE.Mesh {
   const points = worldOutline.map((p) => new THREE.Vector3(p.x, waterY, p.z))
   const curve = new THREE.CatmullRomCurve3(points, true, 'centripetal')
-  const geometry = new THREE.TubeGeometry(curve, Math.max(worldOutline.length, 48), 0.08, 6, true)
+  const geometry = new THREE.TubeGeometry(curve, Math.max(worldOutline.length, 48), 0.08, 8, true)
   const material = new THREE.MeshStandardMaterial({
     color: '#7dd3fc',
     emissive: '#38bdf8',
