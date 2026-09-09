@@ -1,11 +1,19 @@
 import { Suspense, lazy, useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import type { Tables } from '../lib/database.types'
-import PoolVisual, { resolvePoolVisualConfig, type ResolvedPoolVisualConfig } from './PoolVisual'
+import { resolvePoolVisualConfig, type ResolvedPoolVisualConfig } from './PoolVisual'
 
-// Loaded lazily purely for the post-submit guide capture (see
-// PhotorealReveal below) -- the visible preview during the form itself
-// already loads its own copy of this chunk via PoolVisual.
+// There is deliberately no live PoolVisual/3D preview anywhere in this
+// form anymore -- the only image a visitor ever sees is the one
+// photoreal render, generated exactly once, after they submit their
+// contact info (see PhotorealReveal below). This is a product decision,
+// not just a cost one: showing nothing during the form and only
+// revealing a real photo of their exact pool as the reward for finishing
+// is a stronger completion hook than letting them see a (free, live,
+// but comparatively plain) 3D preview along the way. PoolScene is still
+// loaded here, lazily, purely to render one invisible guide-image capture
+// after submission -- see GuideCapture below -- it is never mounted
+// visibly during steps 0-3.
 const PoolScene = lazy(() => import('../three/PoolScene'))
 
 type FunFeature = Tables<'fun_features'>
@@ -326,7 +334,7 @@ export default function LeadForm() {
   }
 
   return (
-    <div className="mx-auto grid max-w-3xl gap-6">
+    <div className="mx-auto grid max-w-3xl gap-6 lg:grid-cols-[minmax(0,1fr)_260px]">
       <div className="order-2 lg:order-1">
         <form
           onSubmit={handleSubmit}
@@ -408,8 +416,8 @@ export default function LeadForm() {
             <div>
               <h2 className="text-lg font-semibold">{STEPS[3].title}</h2>
               <p className="mt-1 text-sm text-sky-700">
-                Submit your info and we'll turn your preview into a photorealistic rendering of your exact
-                pool — free, and yours to keep.
+                Submit your info and we'll generate a free photorealistic rendering of your exact pool —
+                yours to keep.
               </p>
               <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <label className="block text-sm font-medium text-slate-700">
@@ -489,25 +497,34 @@ export default function LeadForm() {
       </div>
 
       <div className="order-1 lg:order-2">
-        <div>
-          <PoolVisual
-            poolType={poolType}
-            shape={shape}
-            construction={construction}
-            size={poolSize}
-            filtration={filtration}
-            heater={heater}
-            cover={cover}
-            selectedFeatures={features
-              .filter((f) => selectedFeatureIds.includes(f.id))
-              .map((f) => f.name)}
-          />
-          <p className="mt-2 text-center text-xs text-slate-400">
-            A preview, not a final design — your dealer will confirm exact
-            specs.
-          </p>
-        </div>
+        <RenderTeaser />
       </div>
+    </div>
+  )
+}
+
+// A static, purely decorative "locked reveal" card -- no 3D scene, no API
+// call, nothing generated. It exists only to tell a visitor a real photo
+// of their exact pool is waiting on the other side of the form, which is
+// the whole point of not showing them a free preview along the way: the
+// photoreal image only gets generated once, after submission (see
+// PhotorealReveal), so this costs nothing to render and nothing in image
+// generation credits no matter how long someone lingers on the form.
+function RenderTeaser() {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-sky-200 bg-gradient-to-b from-sky-50 to-white p-6 text-center">
+      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-sky-100 text-sky-700">
+        <svg viewBox="-10 -10 20 20" width={24} height={24} stroke="currentColor" fill="none" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
+          <rect x={-6} y={-1} width={12} height={9} rx={1.5} />
+          <path d="M -3.5 -1 L -3.5 -4 A 3.5 3.5 0 0 1 3.5 -4 L 3.5 -1" />
+          <circle cx={0} cy={3.3} r={1.3} fill="currentColor" stroke="none" />
+        </svg>
+      </div>
+      <p className="text-sm font-semibold text-slate-800">Your photorealistic rendering is waiting</p>
+      <p className="text-xs text-slate-500">
+        Finish the form and we'll generate a free photorealistic image of your exact pool — shape, size, and every
+        extra you picked.
+      </p>
     </div>
   )
 }

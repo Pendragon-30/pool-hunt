@@ -176,6 +176,7 @@ function GuideCapture({ config, onCaptured }: GuideCaptureProps) {
 }
 
 type GenerationStatus = 'idle' | 'generating' | 'done' | 'error'
+type CacheStatus = 'idle' | 'saving' | 'saved' | 'error'
 
 export default function PhotorealPreviewDashboard() {
   const [poolType, setPoolType] = useState<PoolType>('inground')
@@ -188,10 +189,21 @@ export default function PhotorealPreviewDashboard() {
 
   const [guideDataUrl, setGuideDataUrl] = useState<string | null>(null)
   const [resultDataUrl, setResultDataUrl] = useState<string | null>(null)
+  const [resultBase64, setResultBase64] = useState<string | null>(null)
+  const [resultMimeType, setResultMimeType] = useState('image/png')
   const [status, setStatus] = useState<GenerationStatus>('idle')
   const [errorMessage, setErrorMessage] = useState('')
   const [elapsedMs, setElapsedMs] = useState(0)
   const timerRef = useRef<number | null>(null)
+
+  // The live lead form no longer shows any preview or generates an image
+  // until a visitor finishes it (see LeadForm.tsx) -- so this dashboard is
+  // now the only place combos get generated ahead of time. Pushing a good
+  // result to the cache here means the next real visitor who picks this
+  // exact combo gets it instantly instead of waiting on Gemini.
+  const [cacheStatus, setCacheStatus] = useState<CacheStatus>('idle')
+  const [cacheError, setCacheError] = useState('')
+  const [cachedComboKey, setCachedComboKey] = useState<string | null>(null)
 
   const config: Config = useMemo(
     () => ({ poolType, shape, construction, size, cover, extras, ledLighting }),
@@ -201,26 +213,36 @@ export default function PhotorealPreviewDashboard() {
 
   const shapeOptions = poolType === 'above_ground' ? ABOVE_GROUND_SHAPES : INGROUND_SHAPES
 
+  const resetResult = () => {
+    setGuideDataUrl(null)
+    setResultDataUrl(null)
+    setResultBase64(null)
+    setStatus('idle')
+    setCacheStatus('idle')
+    setCacheError('')
+    setCachedComboKey(null)
+  }
+
   const setPoolTypeAndDefaults = (next: PoolType) => {
     setPoolType(next)
     setShape(next === 'above_ground' ? 'round' : 'rectangle')
     setConstruction(next === 'above_ground' ? 'vinyl_liner' : 'fiberglass')
-    setGuideDataUrl(null)
-    setResultDataUrl(null)
-    setStatus('idle')
+    resetResult()
   }
 
   const toggleExtra = (slug: ExtraSlug) => {
     setExtras((prev) => (prev.includes(slug) ? prev.filter((s) => s !== slug) : [...prev, slug]))
-    setGuideDataUrl(null)
-    setResultDataUrl(null)
-    setStatus('idle')
+    resetResult()
   }
 
   const handleGuideCaptured = (dataUrl: string) => {
     setGuideDataUrl(dataUrl)
     setResultDataUrl(null)
+    setResultBase64(null)
     setStatus('idle')
+    setCacheStatus('idle')
+    setCacheError('')
+    setCachedComboKey(null)
   }
 
   const generate = async () => {
@@ -228,6 +250,10 @@ export default function PhotorealPreviewDashboard() {
     setStatus('generating')
     setErrorMessage('')
     setResultDataUrl(null)
+    setResultBase64(null)
+    setCacheStatus('idle')
+    setCacheError('')
+    setCachedComboKey(null)
     const startedAt = Date.now()
     setElapsedMs(0)
     timerRef.current = window.setInterval(() => setElapsedMs(Date.now() - startedAt), 200)
@@ -250,6 +276,8 @@ export default function PhotorealPreviewDashboard() {
       }
 
       setResultDataUrl(`data:${data.mimeType || 'image/png'};base64,${data.dataBase64}`)
+      setResultBase64(data.dataBase64)
+      setResultMimeType(data.mimeType || 'image/png')
       setStatus('done')
     } catch (err) {
       setStatus('error')
@@ -262,14 +290,57 @@ export default function PhotorealPreviewDashboard() {
     }
   }
 
+  // Pushes the already-generated result into the same pool_renders /
+  // pool-renders cache generate-pool-render-public reads from, under the
+  // exact combo_key it would compute for this config -- see
+  // cache-pool-render/index.ts for why the key derivation there is kept
+  // byte-for-byte identical to the public function's.
+  const cacheForSite = async () => {
+    if (!resultBase64) return
+    setCacheStatus('saving')
+    setCacheError('')
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const accessToken = sessionData.session?.access_token
+
+      const { data, error } = await supabase.functions.invoke('cache-pool-render', {
+        body: {
+          poolType: config.poolType,
+          shape: config.shape,
+          construction: config.construction,
+          size: config.size,
+          cover: config.cover,
+          extras: config.extras,
+          ledLighting: config.ledLighting,
+          imageBase64: resultBase64,
+          mimeType: resultMimeType,
+        },
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+      })
+
+      if (error || !data?.ok) {
+        setCacheStatus('error')
+        setCacheError((data && (data as any).error) || error?.message || 'Unknown error')
+        return
+      }
+
+      setCachedComboKey(data.comboKey)
+      setCacheStatus('saved')
+    } catch (err) {
+      setCacheStatus('error')
+      setCacheError(err instanceof Error ? err.message : 'Failed to save to cache')
+    }
+  }
+
   return (
     <main className="mx-auto max-w-6xl px-6 py-6">
       <div className="mb-4">
-        <h1 className="text-lg font-semibold text-slate-900">AI photoreal preview (review only)</h1>
+        <h1 className="text-lg font-semibold text-slate-900">AI photoreal preview &amp; cache warming</h1>
         <p className="text-sm text-slate-500">
           The 3D scene on the left is captured as a guide image, then handed to Gemini to repaint as a real photo on
-          the right. Nothing here is shown to site visitors yet -- this is purely for checking quality and
-          generation time before wiring it into the live form.
+          the right. Nothing generates here automatically for site visitors -- the live form only ever generates one
+          image, once, after someone submits it. Use "Cache this for site visitors" below to publish a result you're
+          happy with, so the next visitor who picks this exact combo gets it instantly instead of waiting on Gemini.
         </p>
       </div>
 
@@ -293,9 +364,7 @@ export default function PhotorealPreviewDashboard() {
             value={shape}
             onChange={(e) => {
               setShape(e.target.value as InGroundShapeId | AboveGroundShapeId)
-              setGuideDataUrl(null)
-              setResultDataUrl(null)
-              setStatus('idle')
+              resetResult()
             }}
           >
             {shapeOptions.map((opt) => (
@@ -314,9 +383,7 @@ export default function PhotorealPreviewDashboard() {
               value={construction}
               onChange={(e) => {
                 setConstruction(e.target.value as ConstructionId)
-                setGuideDataUrl(null)
-                setResultDataUrl(null)
-                setStatus('idle')
+                resetResult()
               }}
             >
               {INGROUND_CONSTRUCTIONS.map((opt) => (
@@ -335,9 +402,7 @@ export default function PhotorealPreviewDashboard() {
             value={size}
             onChange={(e) => {
               setSize(e.target.value as PoolSize)
-              setGuideDataUrl(null)
-              setResultDataUrl(null)
-              setStatus('idle')
+              resetResult()
             }}
           >
             {SIZES.map((opt) => (
@@ -355,9 +420,7 @@ export default function PhotorealPreviewDashboard() {
             value={cover}
             onChange={(e) => {
               setCover(e.target.value)
-              setGuideDataUrl(null)
-              setResultDataUrl(null)
-              setStatus('idle')
+              resetResult()
             }}
           >
             {COVERS.map((opt) => (
@@ -374,9 +437,7 @@ export default function PhotorealPreviewDashboard() {
             checked={ledLighting}
             onChange={(e) => {
               setLedLighting(e.target.checked)
-              setGuideDataUrl(null)
-              setResultDataUrl(null)
-              setStatus('idle')
+              resetResult()
             }}
           />
           LED Lighting
@@ -431,7 +492,24 @@ export default function PhotorealPreviewDashboard() {
           </div>
           {status === 'error' && <div className="mt-2 text-xs text-red-600">{errorMessage}</div>}
           {status === 'done' && (
-            <div className="mt-2 text-xs text-slate-500">Generated in {(elapsedMs / 1000).toFixed(1)}s.</div>
+            <>
+              <div className="mt-2 text-xs text-slate-500">Generated in {(elapsedMs / 1000).toFixed(1)}s.</div>
+              <button
+                onClick={cacheForSite}
+                disabled={cacheStatus === 'saving' || cacheStatus === 'saved'}
+                className="mt-3 w-full rounded-lg bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800 disabled:opacity-50"
+              >
+                {cacheStatus === 'saving'
+                  ? 'Saving to cache…'
+                  : cacheStatus === 'saved'
+                    ? 'Cached for site visitors ✓'
+                    : 'Cache this for site visitors'}
+              </button>
+              {cacheStatus === 'error' && <div className="mt-2 text-xs text-red-600">{cacheError}</div>}
+              {cacheStatus === 'saved' && cachedComboKey && (
+                <div className="mt-2 break-all text-xs text-slate-400">combo_key: {cachedComboKey}</div>
+              )}
+            </>
           )}
         </div>
       </div>
