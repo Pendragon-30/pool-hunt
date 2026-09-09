@@ -282,7 +282,7 @@ export default function LeadForm() {
   }
 
   return (
-    <div className="mx-auto grid max-w-6xl gap-6 lg:grid-cols-[minmax(0,1fr)_400px]">
+    <div className="mx-auto grid max-w-3xl gap-6">
       <div className="order-2 lg:order-1">
         <form
           onSubmit={handleSubmit}
@@ -440,7 +440,7 @@ export default function LeadForm() {
       </div>
 
       <div className="order-1 lg:order-2">
-        <div className="lg:sticky lg:top-6">
+        <div>
           <PoolVisual
             poolType={poolType}
             shape={shape}
