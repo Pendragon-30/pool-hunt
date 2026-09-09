@@ -1,7 +1,6 @@
 import * as THREE from 'three'
 import {
   ABOVE_GROUND_WALL_THICKNESS_FT,
-  INGROUND_DECK_MARGIN_FT,
   INGROUND_DEPTH_FT,
   buildDeckWithHoleGeometry,
   buildFlatOutlineGeometry,
@@ -9,6 +8,7 @@ import {
   buildWallStripGeometry,
   getAboveGroundDimensions,
   getAboveGroundOutlineShape,
+  getInGroundDeckMarginFt,
   getInGroundOutlineShape,
   getOutlineBounds,
   getOutlinePoints,
@@ -118,8 +118,12 @@ function buildInGroundScene(
   // Deck: a large plate with a hole cut to this exact pool outline, so it
   // is flush against the basin walls by construction -- there is no way
   // for the deck and the pool edge to disagree about where the edge is.
-  const deckOuterWidth = bounds.width + INGROUND_DECK_MARGIN_FT * 2
-  const deckOuterLength = bounds.length + INGROUND_DECK_MARGIN_FT * 2
+  // The margin itself is size-aware (see getInGroundDeckMarginFt) -- a
+  // fixed margin at every size is what made "small" read as a tiny pool
+  // swallowed by a comparatively huge deck.
+  const deckMargin = getInGroundDeckMarginFt(size)
+  const deckOuterWidth = bounds.width + deckMargin * 2
+  const deckOuterLength = bounds.length + deckMargin * 2
   const deckGeometry = buildDeckWithHoleGeometry(deckOuterWidth, deckOuterLength, localPoints, 2.5)
   const deck = new THREE.Mesh(deckGeometry, getDeckMaterial())
   deck.castShadow = true
@@ -165,7 +169,7 @@ function buildInGroundScene(
     group.add(buildLedLightingGlow(worldPoints, INGROUND_WATER_Y + 0.05))
   }
 
-  const ringOffset = INGROUND_DECK_MARGIN_FT * 0.5
+  const ringOffset = deckMargin * 0.5
   for (const slug of extras) {
     const placement = getSlotPlacement(slug, bounds.width, bounds.length, ringOffset)
     const accessory = buildExtraGroup(slug)

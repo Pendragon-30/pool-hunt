@@ -85,11 +85,20 @@ const EXTRA_ZONE_DEGREES: Record<ExtraSlug, number> = {
 // A swim-up bar's counter and a tanning ledge's shelf are meant to sit
 // right at the pool's edge (people swim up to one, the other is really a
 // shallow shelf at the waterline) -- pull those in much closer than the
-// freestanding structures like a slide, diving board, or hot tub, which
-// belong out on the open deck instead of crowding the coping.
+// freestanding structures like a slide, diving board, waterfall, or
+// natural slide, which belong out on the open deck instead of crowding the
+// coping. "Hot tub / spa combo" belongs in this close-in group too, NOT
+// with the freestanding structures: a "hot tub / spa combo" is meant to
+// read as a raised spa built directly into the pool structure -- sharing a
+// wall with the pool, water spilling over from the spa into the main
+// pool -- not a separate portable hot tub someone dropped nearby. Pulling
+// it in almost to the coping (rather than out on the open deck like a
+// slide or diving board needs to be) is what makes that connected, built-in
+// reading possible in both the 3D guide and the photoreal repaint.
 const EXTRA_RING_OFFSET_SCALE: Partial<Record<ExtraSlug, number>> = {
   swim_up_bar: 0.15,
   tanning_ledge: 0.2,
+  hot_tub_spa_combo: 0.08,
 }
 
 // `ringOffset` (feet) is the base distance outward from the pool's
@@ -465,11 +474,24 @@ export function buildDivingBoardGroup(): THREE.Group {
   return group
 }
 
+// A raised, ATTACHED spa -- not a portable freestanding hot tub. Two things
+// make that reading possible: getSlotPlacement above pulls this group in
+// almost to the pool's own coping (EXTRA_RING_OFFSET_SCALE.hot_tub_spa_combo
+// = 0.08, in the same close-in group as the swim-up bar and tanning ledge),
+// so in the 3D guide the shell visibly overlaps/touches the pool's edge
+// instead of sitting out in the middle of the open deck; and the spillway
+// plane below gives it a literal, visible physical connection -- water
+// flowing from the spa down into the main pool -- which is the single
+// strongest "these are one connected structure" cue a repaint can pick up
+// on. Sized a bit smaller than the original standalone-tub version (2.6ft
+// radius instead of 3.2ft) since a built-in spa bump-out reads as an
+// extension of the pool, not a second pool-sized vessel next to it.
 export function buildHotTubSpaComboGroup(): THREE.Group {
   const group = new THREE.Group()
   const segments = 24
+  const radius = 2.6
   const shellMaterial = new THREE.MeshStandardMaterial({ map: getHotTubWoodTexture(), roughness: 0.65, metalness: 0 })
-  const shell = new THREE.Mesh(new THREE.CylinderGeometry(3.2, 3.2, 2.1, segments), shellMaterial)
+  const shell = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, 2.1, segments), shellMaterial)
   shell.position.set(0, 1.05, 0)
   group.add(shell)
 
@@ -477,20 +499,31 @@ export function buildHotTubSpaComboGroup(): THREE.Group {
   // cylinder cap -- one of the biggest cues that separates "actual object"
   // from "flat cutout."
   const rimMaterial = new THREE.MeshStandardMaterial({ color: '#3c3630', roughness: 0.5 })
-  const rim = new THREE.Mesh(new THREE.TorusGeometry(3.2, 0.18, 12, segments), rimMaterial)
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(radius, 0.18, 12, segments), rimMaterial)
   rim.rotation.x = Math.PI / 2
   rim.position.set(0, 2.12, 0)
   group.add(rim)
 
-  const waterCap = new THREE.Mesh(new THREE.CylinderGeometry(2.85, 2.85, 0.1, segments), getWaterMaterial())
+  const waterCap = new THREE.Mesh(new THREE.CylinderGeometry(radius - 0.35, radius - 0.35, 0.1, segments), getWaterMaterial())
   waterCap.position.set(0, 2.05, 0)
   group.add(waterCap)
+
+  // The spillway: a short sheet of water running down the spa's -Z face
+  // (this file's convention for "toward the pool," see the header comment)
+  // from the rim down to deck level, right where the shell already
+  // overlaps the pool's own edge. This is what turns "a hot tub that
+  // happens to be nearby" into "a spa built into the pool with water
+  // spilling from one into the other."
+  const spillway = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 2.3), getWaterMaterial())
+  spillway.position.set(0, 0.95, -radius + 0.05)
+  spillway.rotation.x = -0.12
+  group.add(spillway)
 
   // A small control panel on the side -- one of the most recognizable
   // hot-tub details at a glance.
   const panelMaterial = new THREE.MeshStandardMaterial({ color: '#2b2b2e', roughness: 0.3, metalness: 0.3 })
   const panel = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.5, 0.7), panelMaterial)
-  panel.position.set(3.28, 1.5, 0)
+  panel.position.set(radius + 0.08, 1.5, 0)
   group.add(panel)
 
   return group

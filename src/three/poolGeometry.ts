@@ -53,15 +53,51 @@ export const ABOVE_GROUND_DIMENSIONS: Record<AboveGroundShapeId, { width: number
 // above-ground pool walls in particular are close to a standard height
 // regardless of diameter, so footprint is what actually reads as "size" to
 // a shopper anyway.
+//
+// The camera always zooms to frame whatever footprint it's given (see
+// boundingRadius in buildScene.ts), so a bigger pool does NOT automatically
+// look bigger in the photo purely from a larger real-world footprint --
+// every combo gets normalized to fill the frame the same way. The only
+// thing that actually reads as "size" on screen is how much of that frame
+// the pool itself occupies versus its surrounding deck (a fixed-width deck
+// margin), which is why "large" needs a substantially bigger multiplier
+// than "small" needs a smaller one: shrinking small further barely changes
+// its on-screen deck ratio once you're already this close to the fixed
+// margin's own width, while growing large further keeps paying off because
+// the fixed margin becomes a smaller and smaller fraction of the total. An
+// earlier version (0.7 / 1 / 1.35) read as "kiddie pool" at small and only
+// mildly bigger than medium at large -- see the DECK_MARGIN_SCALE_BY_SIZE
+// comment in buildScene.ts for the other half of this fix.
 export const SIZE_MULTIPLIERS: Record<PoolSize, number> = {
-  small: 0.7,
+  small: 0.8,
   medium: 1,
-  large: 1.35,
+  large: 1.6,
 }
 
 function scaleDims<T extends { width: number; length: number }>(dims: T, size: PoolSize): T {
   const mult = SIZE_MULTIPLIERS[size]
   return { ...dims, width: dims.width * mult, length: dims.length * mult }
+}
+
+// A small pool doesn't need to lose most of its own visual footprint to a
+// full-width deck margin -- with the same fixed 8ft margin at every size,
+// a "small" pool (already the shortest side of SIZE_MULTIPLIERS) reads as
+// a tiny puddle in the middle of a comparatively enormous deck, which is
+// exactly the "kiddie pool" look this was meant to avoid. Only 'small'
+// gets a reduced margin; medium/large keep the standard margin since by
+// then the pool itself is already the dominant shape in frame. This has
+// to live here (not just in buildScene.ts) because getSceneFootprint
+// below -- which drives the camera's framing -- needs to agree with
+// whatever margin buildInGroundScene actually builds the deck at, or the
+// camera zooms for a margin that isn't the one on screen.
+export const DECK_MARGIN_SCALE_BY_SIZE: Record<PoolSize, number> = {
+  small: 0.7,
+  medium: 1,
+  large: 1,
+}
+
+export function getInGroundDeckMarginFt(size: PoolSize): number {
+  return INGROUND_DECK_MARGIN_FT * (DECK_MARGIN_SCALE_BY_SIZE[size] ?? 1)
 }
 
 export function getInGroundDimensions(shape: InGroundShapeId, size: PoolSize): { width: number; length: number } {
@@ -209,7 +245,8 @@ export function getSceneFootprint(
     return { width: dims.width, length: dims.length }
   }
   const dims = getInGroundDimensions(shape as InGroundShapeId, size)
-  return { width: dims.width + INGROUND_DECK_MARGIN_FT * 2, length: dims.length + INGROUND_DECK_MARGIN_FT * 2 }
+  const deckMargin = getInGroundDeckMarginFt(size)
+  return { width: dims.width + deckMargin * 2, length: dims.length + deckMargin * 2 }
 }
 
 // Converts a local 2D outline point (as returned by getOutlinePoints) into

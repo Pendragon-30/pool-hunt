@@ -73,7 +73,10 @@ const EXTRA_DESCRIPTIONS: Record<ExtraSlug, string> = {
   swim_up_bar: 'a swim-up bar with underwater stools, right at the pool edge',
   tanning_ledge: 'a shallow tanning ledge with loungers on it, at the pool edge',
   diving_board: 'a diving board at one end of the pool',
-  hot_tub_spa_combo: 'a wood-paneled hot tub / spa in a corner of the deck',
+  hot_tub_spa_combo:
+    'a raised spa built directly into and attached to the main pool at one corner, sharing a wall with the pool ' +
+    'and with a visible spillover where its water flows into the main pool -- a built-in, connected spa, NOT a ' +
+    'separate freestanding or portable hot tub sitting apart from the pool',
   waterfall: 'a natural rock waterfall feature',
 }
 
