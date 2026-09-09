@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { chromaKeyAndUpload } from './chromaKey'
 
 export type AssetItem = {
   /** Storage filename without the .png extension — also used as the React key. */
@@ -71,7 +72,7 @@ export default function AssetGenerationGrid({
       headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
     })
 
-    if (error || !data?.url) {
+    if (error || !data?.dataBase64) {
       setStatus((s) => ({ ...s, [item.key]: 'error' }))
       setErrors((e) => ({
         ...e,
@@ -80,8 +81,20 @@ export default function AssetGenerationGrid({
       return
     }
 
-    setUrls((u) => ({ ...u, [item.key]: `${data.url}?v=${Date.now()}` }))
-    setStatus((s) => ({ ...s, [item.key]: 'done' }))
+    // Gemini returns the image on a solid magenta chroma-key background
+    // (it doesn't reliably support real alpha transparency) -- key that
+    // out to true transparency in the browser, then upload the result.
+    try {
+      const url = await chromaKeyAndUpload(data.dataBase64, data.mimeType || 'image/png', bucket, `${item.key}.png`)
+      setUrls((u) => ({ ...u, [item.key]: url }))
+      setStatus((s) => ({ ...s, [item.key]: 'done' }))
+    } catch (err) {
+      setStatus((s) => ({ ...s, [item.key]: 'error' }))
+      setErrors((e) => ({
+        ...e,
+        [item.key]: err instanceof Error ? err.message : 'Failed to process the generated image',
+      }))
+    }
   }
 
   const generateAllMissing = async () => {
