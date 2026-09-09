@@ -103,7 +103,8 @@ function buildSceneDescription(config: Config): string {
   } else {
     parts.push(
       `An inground, ${sizeWord} ${config.shape} swimming pool built with ${CONSTRUCTION_DESCRIPTIONS[config.construction]}, ` +
-        'set flush into a poured-concrete deck with a plain grassy yard beyond it.',
+        'set flush into a poured-concrete deck, framed tightly so the pool and deck fill most of the photo -- ' +
+        'only a narrow strip of grass at the very edges of the frame, not a wide lawn or yard.',
     )
   }
   if (config.cover !== 'none') {

@@ -126,11 +126,22 @@ function buildInGroundScene(
   deck.receiveShadow = true
   group.add(deck)
 
-  // A little grass peeking out beyond the deck for context. Cut with a hole
+  // Just enough grass to keep the deck from looking like it's floating
+  // against bare sky at its corners -- NOT a full yard. Sized off the
+  // deck's own half-diagonal (the distance from center to its farthest
+  // corner) plus a couple of feet, rather than a flat fraction of its
+  // longest side: the old 0.85x-of-longest-side formula produced a ground
+  // radius well past what the camera actually frames (see boundingRadius
+  // in buildPoolScene below), so a wide grass margin was visible on every
+  // side no matter how tightly the camera was already zoomed on the pool
+  // itself. Landscaping/yard context belongs in a separate "landscaping"
+  // category if that's ever added -- this preview's job is "a full
+  // picture of the pool," not a lawn with a pool in it. Cut with a hole
   // matching the deck's own outer footprint (see buildGroundWithHoleGeometry)
   // so this plate never sits in front of the basin itself -- a plain disc
   // here previously hid the entire pool interior behind flat green ground.
-  const groundRadius = Math.max(deckOuterWidth, deckOuterLength) * 0.85
+  const deckHalfDiagonal = Math.hypot(deckOuterWidth / 2, deckOuterLength / 2)
+  const groundRadius = deckHalfDiagonal + 2
   const ground = new THREE.Mesh(
     buildGroundWithHoleGeometry(groundRadius, deckOuterWidth, deckOuterLength, 2.5),
     new THREE.MeshStandardMaterial({ color: '#7fac68', roughness: 1 }),
@@ -214,7 +225,11 @@ function buildAboveGroundScene(
   water.position.y = dims.wallHeight - ABOVE_GROUND_WATER_Y_MARGIN
   group.add(water)
 
-  const groundRadius = Math.max(dims.width, dims.length) * 0.9
+  // Same tight-border approach as the inground scene above -- a small
+  // fixed margin past the pool wall's own half-diagonal, not a big
+  // fraction of its longest side.
+  const groundHalfDiagonal = Math.hypot(dims.width / 2, dims.length / 2)
+  const groundRadius = groundHalfDiagonal + 2
   const ground = new THREE.Mesh(
     new THREE.CircleGeometry(groundRadius, 48),
     new THREE.MeshStandardMaterial({ color: '#7fac68', roughness: 1 }),
