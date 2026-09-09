@@ -324,7 +324,10 @@ function ExtraOverlay({
   const { width, height } = getExtraOverlaySize(name)
 
   return (
-    <g className="pool-pop-in" style={{ transformBox: 'fill-box', transformOrigin: 'center' }}>
+    <g
+      className="pool-pop-in"
+      style={{ transformBox: 'fill-box', transformOrigin: 'center', filter: 'url(#sticker-ground-shadow)' }}
+    >
       <title>{name}</title>
       <image
         href={getExtraStickerUrl(name)}
@@ -463,6 +466,14 @@ export default function PoolVisual({
           className="block aspect-[4/3] w-full object-cover pool-pop-in"
         />
         <svg viewBox="0 0 400 300" className="absolute inset-0 h-full w-full" role="presentation">
+          <defs>
+            {/* Soft grounding shadow under every sticker overlay (extras + cover)
+                so they read as sitting on the deck/water rather than looking
+                like flat clipart pasted on top of the photo. */}
+            <filter id="sticker-ground-shadow" x="-60%" y="-60%" width="220%" height="220%">
+              <feDropShadow dx="0" dy="4" stdDeviation="3.5" floodColor="#0f172a" floodOpacity="0.35" />
+            </filter>
+          </defs>
           {hasCover && cover !== 'undecided' && (
             <CoverOverlay key={cover} cover={cover} poolType={effectivePoolType} />
           )}
