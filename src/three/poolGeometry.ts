@@ -1,0 +1,275 @@
+import * as THREE from 'three'
+
+// This module is the single source of truth for what shape a pool actually
+// is, in real-world feet. Everything downstream -- the basin walls, the
+// deck's cutout, the water surface, and where accessories get placed -- is
+// built from the exact same outline points, so a shape can never drift
+// between its own material variants (only the material swaps) and an
+// accessory can never end up the wrong size relative to the pool it's
+// sitting next to. That "everything traces back to one shared shape" is the
+// whole reason this replaced the old AI-generated-photo pipeline, where each
+// image was an independent, non-deterministic render with no such guarantee.
+
+export type PoolType = 'inground' | 'above_ground'
+export type InGroundShapeId = 'rectangle' | 'freeform' | 'kidney' | 'oval' | 'round' | 'lap'
+export type AboveGroundShapeId = 'round' | 'oval'
+export type ConstructionId = 'fiberglass' | 'vinyl_liner' | 'concrete_gunite'
+
+export const INGROUND_SHAPES: InGroundShapeId[] = ['rectangle', 'freeform', 'kidney', 'oval', 'round', 'lap']
+export const ABOVE_GROUND_SHAPES: AboveGroundShapeId[] = ['round', 'oval']
+
+// How far the poured-concrete deck extends past the pool edge on every
+// side, in feet -- matches the framing the old photo-generation prompts
+// asked for, so the overall scene doesn't suddenly look different in scale.
+export const INGROUND_DECK_MARGIN_FT = 8
+export const INGROUND_DEPTH_FT = 4.5
+export const INGROUND_DECK_THICKNESS_FT = 0.4
+export const ABOVE_GROUND_WALL_THICKNESS_FT = 0.25
+
+export const INGROUND_DIMENSIONS: Record<InGroundShapeId, { width: number; length: number }> = {
+  rectangle: { width: 16, length: 32 },
+  oval: { width: 15, length: 30 },
+  round: { width: 18, length: 18 },
+  lap: { width: 8, length: 40 },
+  kidney: { width: 20, length: 24 },
+  freeform: { width: 22, length: 24 },
+}
+
+export const ABOVE_GROUND_DIMENSIONS: Record<AboveGroundShapeId, { width: number; length: number; wallHeight: number }> = {
+  round: { width: 24, length: 24, wallHeight: 4 },
+  oval: { width: 12, length: 24, wallHeight: 4 },
+}
+
+function roundedRectShape(width: number, length: number, radius: number): THREE.Shape {
+  const hw = width / 2
+  const hl = length / 2
+  const r = Math.min(radius, hw, hl)
+  const s = new THREE.Shape()
+  s.moveTo(-hw + r, -hl)
+  s.lineTo(hw - r, -hl)
+  s.quadraticCurveTo(hw, -hl, hw, -hl + r)
+  s.lineTo(hw, hl - r)
+  s.quadraticCurveTo(hw, hl, hw - r, hl)
+  s.lineTo(-hw + r, hl)
+  s.quadraticCurveTo(-hw, hl, -hw, hl - r)
+  s.lineTo(-hw, -hl + r)
+  s.quadraticCurveTo(-hw, -hl, -hw + r, -hl)
+  s.closePath()
+  return s
+}
+
+function ellipseShape(width: number, length: number): THREE.Shape {
+  const s = new THREE.Shape()
+  s.absellipse(0, 0, width / 2, length / 2, 0, Math.PI * 2, false, 0)
+  return s
+}
+
+// A rectangle with semicircular caps -- the classic "stadium" outline,
+// used for the lap pool so its ends read as smooth rounded coping rather
+// than square corners.
+function stadiumShape(width: number, length: number): THREE.Shape {
+  const r = width / 2
+  const halfStraight = Math.max(length / 2 - r, 0.5)
+  const s = new THREE.Shape()
+  s.moveTo(-r, -halfStraight)
+  s.lineTo(-r, halfStraight)
+  s.absarc(0, halfStraight, r, Math.PI, 0, true)
+  s.lineTo(r, -halfStraight)
+  s.absarc(0, -halfStraight, r, 0, Math.PI, true)
+  s.closePath()
+  return s
+}
+
+// Organic (kidney / freeform) outlines are built from a small set of
+// hand-picked radius multipliers sampled around an ellipse and smoothed
+// through a closed centripetal Catmull-Rom curve, then re-sampled into a
+// plain point list. Centripetal parameterization is specifically the
+// variant that avoids self-intersecting loops/cusps for unevenly spaced
+// control points, which matters here since we deliberately want an uneven,
+// hand-shaped silhouette rather than a perfect ellipse.
+function organicShape(width: number, length: number, radiusMultipliers: number[]): THREE.Shape {
+  const rx = width / 2
+  const rz = length / 2
+  const n = radiusMultipliers.length
+  const controlPoints = radiusMultipliers.map((mult, i) => {
+    const angle = (i / n) * Math.PI * 2
+    return new THREE.Vector3(Math.cos(angle) * rx * mult, Math.sin(angle) * rz * mult, 0)
+  })
+  const curve = new THREE.CatmullRomCurve3(controlPoints, true, 'centripetal')
+  const sampled = curve.getPoints(96)
+  return new THREE.Shape(sampled.map((p) => new THREE.Vector2(p.x, p.y)))
+}
+
+// A rounded, gently pinched bean outline -- one shallow concave "waist" on
+// one side (index 4, the left) and a slightly fuller bulge opposite it
+// (index 6), which is what reads as "kidney-shaped" at a glance without
+// being so sharp a curve that the smoothing pass risks a self-intersection.
+const KIDNEY_RADIUS_MULTIPLIERS = [1.0, 0.95, 1.05, 0.9, 0.6, 0.8, 1.1, 0.95]
+
+// Gentle, irregular variation with no sharp concave pinch -- a soft
+// asymmetric "lagoon" outline, distinct from the kidney's waist.
+const FREEFORM_RADIUS_MULTIPLIERS = [1.0, 1.08, 0.92, 1.1, 0.85, 1.05, 0.95, 1.02]
+
+export function getInGroundOutlineShape(shape: InGroundShapeId): THREE.Shape {
+  const { width, length } = INGROUND_DIMENSIONS[shape]
+  switch (shape) {
+    case 'rectangle':
+      return roundedRectShape(width, length, 1)
+    case 'oval':
+      return ellipseShape(width, length)
+    case 'round':
+      return ellipseShape(width, length)
+    case 'lap':
+      return stadiumShape(width, length)
+    case 'kidney':
+      return organicShape(width, length, KIDNEY_RADIUS_MULTIPLIERS)
+    case 'freeform':
+      return organicShape(width, length, FREEFORM_RADIUS_MULTIPLIERS)
+  }
+}
+
+export function getAboveGroundOutlineShape(shape: AboveGroundShapeId): THREE.Shape {
+  const { width, length } = ABOVE_GROUND_DIMENSIONS[shape]
+  return ellipseShape(width, length)
+}
+
+// Sampled boundary points for a shape, shared by every consumer (basin
+// walls, deck cutout, floor, water surface, cover, and accessory
+// placement) so they are all guaranteed to agree on exactly the same
+// outline -- there is no way for the deck's cutout to end up a different
+// size or curve than the basin it's supposed to sit flush against.
+export function getOutlinePoints(shape: THREE.Shape, segments = 96): THREE.Vector2[] {
+  return shape.getPoints(segments)
+}
+
+export function getOutlineBounds(points: THREE.Vector2[]): { width: number; length: number; centroid: THREE.Vector2 } {
+  let minX = Infinity
+  let maxX = -Infinity
+  let minY = Infinity
+  let maxY = -Infinity
+  const centroid = new THREE.Vector2()
+  for (const p of points) {
+    minX = Math.min(minX, p.x)
+    maxX = Math.max(maxX, p.x)
+    minY = Math.min(minY, p.y)
+    maxY = Math.max(maxY, p.y)
+    centroid.add(p)
+  }
+  centroid.divideScalar(points.length)
+  return { width: maxX - minX, length: maxY - minY, centroid }
+}
+
+// Overall footprint (pool + deck margin, or above-ground pool alone) used
+// to size the deck plate and to auto-frame the camera consistently across
+// wildly different real-world sizes (an 18ft round pool vs. a 40ft lap
+// pool) -- every scene fills the frame by roughly the same proportion no
+// matter which shape is showing.
+export function getSceneFootprint(poolType: PoolType, shape: InGroundShapeId | AboveGroundShapeId): { width: number; length: number } {
+  if (poolType === 'above_ground') {
+    const dims = ABOVE_GROUND_DIMENSIONS[shape as AboveGroundShapeId]
+    return { width: dims.width, length: dims.length }
+  }
+  const dims = INGROUND_DIMENSIONS[shape as InGroundShapeId]
+  return { width: dims.width + INGROUND_DECK_MARGIN_FT * 2, length: dims.length + INGROUND_DECK_MARGIN_FT * 2 }
+}
+
+// Converts a local 2D outline point (as returned by getOutlinePoints) into
+// a world-space (x, z) pair using the same convention every other piece of
+// geometry in this module uses (see the comment inside buildWallStripGeometry).
+// Anything that needs to position an object relative to the pool's actual
+// outline -- accessory placement, camera framing -- should go through this
+// rather than re-deriving the sign convention.
+export function outlinePointToWorldXZ(p: THREE.Vector2): { x: number; z: number } {
+  return { x: p.x, z: -p.y }
+}
+
+// Builds a flat quad "wall strip" connecting a closed loop of 2D points at
+// one height to the same loop at another height -- used for the inground
+// basin's interior walls and the above-ground pool's exterior wall. The
+// material is always rendered double-sided (see materials.ts) specifically
+// so this geometry's triangle winding direction never has to be gotten
+// perfectly right -- it's visible from both the inside and the outside
+// either way, which matters a lot given none of this can be visually
+// tested before it reaches a real browser.
+export function buildWallStripGeometry(points: THREE.Vector2[], topY: number, bottomY: number): THREE.BufferGeometry {
+  const positions: number[] = []
+  const uvs: number[] = []
+  const n = points.length
+  let perimeter = 0
+  const cumulative: number[] = [0]
+  for (let i = 0; i < n; i++) {
+    const a = points[i]
+    const b = points[(i + 1) % n]
+    perimeter += a.distanceTo(b)
+    cumulative.push(perimeter)
+  }
+  const height = Math.abs(topY - bottomY)
+
+  // World Z is -localY here to match the flat pieces (floor/water/cover
+  // via buildFlatOutlineGeometry, and the deck via buildDeckWithHoleGeometry)
+  // which all get their local-XY shape reoriented with `rotateX(-Math.PI/2)`
+  // -- that rotation maps local (x, y, 0) to world (x, 0, -y). This strip is
+  // built directly in world space rather than rotated, so it has to apply
+  // that same sign flip by hand or an asymmetric outline (kidney, freeform)
+  // would come out mirrored between the walls and everything else.
+  for (let i = 0; i < n; i++) {
+    const a = points[i]
+    const b = points[(i + 1) % n]
+    const uA = perimeter > 0 ? cumulative[i] / perimeter : 0
+    const uB = perimeter > 0 ? cumulative[i + 1] / perimeter : 0
+
+    const aTop = [a.x, topY, -a.y]
+    const bTop = [b.x, topY, -b.y]
+    const aBot = [a.x, bottomY, -a.y]
+    const bBot = [b.x, bottomY, -b.y]
+
+    positions.push(...aTop, ...bTop, ...bBot, ...aTop, ...bBot, ...aBot)
+    uvs.push(uA, 1, uB, 1, uB, 0, uA, 1, uB, 0, uA, 0)
+  }
+
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2))
+  geometry.computeVertexNormals()
+  void height
+  return geometry
+}
+
+// A large ground/deck plate with a hole cut exactly matching `holePoints`,
+// flat in the XZ plane at y=0 in local space (the caller positions it).
+export function buildDeckWithHoleGeometry(
+  outerWidth: number,
+  outerLength: number,
+  holePoints: THREE.Vector2[],
+  cornerRadius = 2,
+): THREE.ExtrudeGeometry {
+  const outer = roundedRectShape(outerWidth, outerLength, cornerRadius)
+  const hole = new THREE.Path(holePoints)
+  outer.holes.push(hole)
+  const geometry = new THREE.ExtrudeGeometry(outer, {
+    depth: INGROUND_DECK_THICKNESS_FT,
+    bevelEnabled: false,
+    curveSegments: 24,
+  })
+  // ExtrudeGeometry extrudes the shape from local z=0 to z=depth along +Z,
+  // with the up-facing (+Y-after-rotation) cap ending up at the z=depth
+  // end. rotateX(-Math.PI/2) maps local (x, y, z) -> world (x, z, -y), so
+  // that up-facing cap lands at world y=+depth, not 0 -- translate by
+  // -depth (not +depth) to bring the walkable top surface to world y=0,
+  // matching the basin's coping height, with the plate's thickness
+  // hanging below it (down to y=-depth) rather than above.
+  geometry.rotateX(-Math.PI / 2)
+  geometry.translate(0, -INGROUND_DECK_THICKNESS_FT, 0)
+  return geometry
+}
+
+// A flat filled disc/shape used for the pool floor, the water surface, and
+// the cover -- all three are literally the same outline at different
+// heights and opacities, which is what makes a cover always fit the water
+// exactly instead of needing a separately-drawn "cover shape."
+export function buildFlatOutlineGeometry(points: THREE.Vector2[]): THREE.ShapeGeometry {
+  const shape = new THREE.Shape(points)
+  const geometry = new THREE.ShapeGeometry(shape, 1)
+  geometry.rotateX(-Math.PI / 2)
+  return geometry
+}
