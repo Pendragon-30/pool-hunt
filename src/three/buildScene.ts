@@ -59,16 +59,22 @@ export type BuiltScene = {
   sceneRadius: number
 }
 
-// A lower elevation and wider field of view than the first pass -- the
-// original 38 degrees / 32mm-equivalent framing, combined with generous
-// padding around the footprint, put the camera so far away and so nearly
-// overhead that the scene read as a flat top-down map: a 4-5ft-tall
-// accessory or a 4.5ft-deep basin barely registers against a 30-50ft-wide
-// deck from that far up. Standing the camera closer to eye level and
-// zooming in tighter makes the same real-world height differences occupy
-// much more of the frame.
+// Even after fixing the ground-occlusion bug (which was hiding the whole
+// basin) and lowering the angle from the original 38 degrees to 26, the
+// scene still read as closer to a map than a photo: at 26 degrees you are
+// looking almost straight down at a very thin (4.5ft-deep) basin, so the
+// side walls that would actually signal "this has depth" project to only a
+// few pixels tall on screen -- nearly all of what's visible is the flat
+// water/deck/ground planes. Dropping to a genuinely low, near-horizon-ish
+// angle is what actually exposes that vertical profile (the basin wall,
+// the hot tub's height, the slide's rise) as visible height in the frame
+// instead of being foreshortened away. Note this does NOT require also
+// pulling the camera closer: the bounding-SPHERE framing formula below is
+// rotation-invariant by construction -- a sphere subtends the same angular
+// size from any direction at a fixed distance, so the whole footprint stays
+// framed no matter how the elevation changes.
 const FOV_DEGREES = 42
-const CAMERA_ELEVATION_DEG = 26
+const CAMERA_ELEVATION_DEG = 15
 const CAMERA_AZIMUTH_DEG = 35
 
 function buildInGroundScene(shape: InGroundShapeId, construction: ConstructionId, cover: string, extras: ExtraSlug[], ledLighting: boolean): THREE.Group {

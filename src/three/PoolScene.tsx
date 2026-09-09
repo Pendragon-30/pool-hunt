@@ -118,8 +118,15 @@ export default function PoolScene(props: PoolSceneProps) {
       <ambientLight intensity={0.35} />
       <directionalLight
         castShadow
-        position={[30, 42, 22]}
-        intensity={1.4}
+        // A lower sun angle than the first pass -- at high noon-ish angles
+        // shadows fall almost straight down and barely peek out from under
+        // an object; a lower, more raking angle throws longer, clearly
+        // visible shadows across the deck, which is one of the strongest
+        // remaining cues (beyond the lowered camera) that objects actually
+        // have height and are sitting ON a surface rather than painted flat
+        // onto it.
+        position={[26, 20, 16]}
+        intensity={1.5}
         shadow-mapSize={[2048, 2048]}
         shadow-camera-left={-shadowExtent}
         shadow-camera-right={shadowExtent}
@@ -129,7 +136,7 @@ export default function PoolScene(props: PoolSceneProps) {
         shadow-camera-far={shadowExtent * 4}
         shadow-bias={-0.0015}
       />
-      <directionalLight position={[-22, 16, -26]} intensity={0.35} />
+      <directionalLight position={[-22, 16, -26]} intensity={0.3} />
       <primitive object={group} />
     </Canvas>
   )
