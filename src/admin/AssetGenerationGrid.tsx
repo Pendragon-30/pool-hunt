@@ -41,6 +41,7 @@ export default function AssetGenerationGrid({
   const [urls, setUrls] = useState<Record<string, string>>({})
   const [status, setStatus] = useState<Record<string, Status>>({})
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [notes, setNotes] = useState<Record<string, string>>({})
   const [runningAll, setRunningAll] = useState(false)
 
   const loadExisting = async () => {
@@ -63,6 +64,7 @@ export default function AssetGenerationGrid({
   const generateOne = async (item: AssetItem) => {
     setStatus((s) => ({ ...s, [item.key]: 'generating' }))
     setErrors((e) => ({ ...e, [item.key]: '' }))
+    setNotes((n) => ({ ...n, [item.key]: '' }))
 
     const { data: sessionData } = await supabase.auth.getSession()
     const accessToken = sessionData.session?.access_token
@@ -79,6 +81,14 @@ export default function AssetGenerationGrid({
         [item.key]: (data && (data as any).error) || error?.message || 'Unknown error',
       }))
       return
+    }
+
+    // Some functions (e.g. generate-pool-image, for non-reference material
+    // variants) attach a `note` when they had to fall back to a
+    // lower-consistency generation path -- surface it as a heads-up rather
+    // than an error, since the image still generated fine.
+    if ((data as any).note) {
+      setNotes((n) => ({ ...n, [item.key]: (data as any).note }))
     }
 
     // Gemini returns the image on a solid magenta chroma-key background
@@ -180,6 +190,9 @@ export default function AssetGenerationGrid({
               <div className="mt-2 text-sm font-medium text-slate-900">{item.label}</div>
               {st === 'error' && errors[item.key] && (
                 <div className="mt-1 line-clamp-2 text-xs text-red-600">{errors[item.key]}</div>
+              )}
+              {st !== 'error' && notes[item.key] && (
+                <div className="mt-1 line-clamp-3 text-xs text-amber-600">{notes[item.key]}</div>
               )}
               <button
                 onClick={() => generateOne(item)}
