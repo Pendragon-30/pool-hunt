@@ -59,15 +59,48 @@ export const EXTRA_SLOT_ORDER: ExtraSlug[] = [
 
 export type SlotPlacement = { x: number; z: number; rotationY: number }
 
-// Evenly-spaced slots on an ellipse matching the scene's actual footprint
-// aspect ratio (so a long, narrow lap pool gets slots spread along its
-// actual deck band instead of clustered off one end), offset outward from
-// the pool's bounding box by `ringOffset` feet. `rotationY` makes the
-// accessory's local -Z axis point back toward the origin (the pool center).
-export function getSlotPlacement(index: number, footprintWidth: number, footprintLength: number, ringOffset: number): SlotPlacement {
-  const angle = (index / EXTRA_SLOT_ORDER.length) * Math.PI * 2
-  const rx = footprintWidth / 2 + ringOffset
-  const rz = footprintLength / 2 + ringOffset
+// Each extra gets a fixed compass-style zone around the pool that reflects
+// how it's actually sited in a real backyard, rather than an arbitrary
+// slot chosen by array index (the previous version's whole "positioning"
+// was just EXTRA_SLOT_ORDER.indexOf(slug) -- a diving board could land in
+// a corner, a side, anywhere, purely by chance). Diving boards and tanning
+// ledges need the pool's full length, so they anchor the two ends (90 /
+// 270 degrees). A swim-up bar and a water feature run along the two long
+// sides (0 / 180). The remaining pieces are freestanding structures rather
+// than pool-edge fixtures, so they take the four corners. Every entry is a
+// distinct angle so multiple selected extras still can never collide, the
+// same guarantee the old evenly-spaced ring gave -- but now the angle a
+// given extra gets is chosen on purpose instead of by list position.
+const EXTRA_ZONE_DEGREES: Record<ExtraSlug, number> = {
+  diving_board: 90,
+  tanning_ledge: 270,
+  swim_up_bar: 0,
+  water_feature: 180,
+  slide: 45,
+  hot_tub_spa_combo: 135,
+  waterfall: 225,
+  natural_slide: 315,
+}
+
+// A swim-up bar's counter and a tanning ledge's shelf are meant to sit
+// right at the pool's edge (people swim up to one, the other is really a
+// shallow shelf at the waterline) -- pull those in much closer than the
+// freestanding structures like a slide, diving board, or hot tub, which
+// belong out on the open deck instead of crowding the coping.
+const EXTRA_RING_OFFSET_SCALE: Partial<Record<ExtraSlug, number>> = {
+  swim_up_bar: 0.15,
+  tanning_ledge: 0.2,
+}
+
+// `ringOffset` (feet) is the base distance outward from the pool's
+// bounding box; the scale table above pulls specific extras in closer.
+// `rotationY` makes the accessory's local -Z axis point back toward the
+// origin (the pool center).
+export function getSlotPlacement(slug: ExtraSlug, footprintWidth: number, footprintLength: number, ringOffset: number): SlotPlacement {
+  const angle = THREE.MathUtils.degToRad(EXTRA_ZONE_DEGREES[slug])
+  const scale = EXTRA_RING_OFFSET_SCALE[slug] ?? 1
+  const rx = footprintWidth / 2 + ringOffset * scale
+  const rz = footprintLength / 2 + ringOffset * scale
   const x = Math.cos(angle) * rx
   const z = Math.sin(angle) * rz
   const rotationY = Math.atan2(-x, z)

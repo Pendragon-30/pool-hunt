@@ -26,7 +26,7 @@ import {
   getDeckMaterial,
   getWaterMaterial,
 } from './materials'
-import { EXTRA_SLOT_ORDER, buildExtraGroup, buildLedLightingGlow, getSlotPlacement, type ExtraSlug } from './extras'
+import { buildExtraGroup, buildLedLightingGlow, getSlotPlacement, type ExtraSlug } from './extras'
 
 // The water sits a few inches below the coping -- completely normal for a
 // real pool and NOT the same thing as the "curb/raised lip" problem the old
@@ -146,9 +146,7 @@ function buildInGroundScene(shape: InGroundShapeId, construction: ConstructionId
 
   const ringOffset = INGROUND_DECK_MARGIN_FT * 0.5
   for (const slug of extras) {
-    const index = EXTRA_SLOT_ORDER.indexOf(slug)
-    if (index === -1) continue
-    const placement = getSlotPlacement(index, bounds.width, bounds.length, ringOffset)
+    const placement = getSlotPlacement(slug, bounds.width, bounds.length, ringOffset)
     const accessory = buildExtraGroup(slug)
     accessory.position.set(placement.x, 0, placement.z)
     accessory.rotation.y = placement.rotationY
@@ -226,9 +224,7 @@ function buildAboveGroundScene(shape: AboveGroundShapeId, cover: string, extras:
 
   const ringOffset = 3
   for (const slug of extras) {
-    const index = EXTRA_SLOT_ORDER.indexOf(slug)
-    if (index === -1) continue
-    const placement = getSlotPlacement(index, dims.width, dims.length, ringOffset)
+    const placement = getSlotPlacement(slug, dims.width, dims.length, ringOffset)
     const accessory = buildExtraGroup(slug)
     accessory.position.set(placement.x, 0, placement.z)
     accessory.rotation.y = placement.rotationY

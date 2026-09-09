@@ -9,6 +9,7 @@ const TABS = [
   { label: 'Dealers', path: '/admin/dealers' },
   { label: 'Blog', path: '/admin/blog' },
   { label: 'Photos', path: '/admin/photos/inground' },
+  { label: 'AI Photoreal', path: '/admin/photoreal' },
 ]
 
 export default function AdminNav({ onRefresh }: { onRefresh: () => void }) {

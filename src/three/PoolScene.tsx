@@ -37,9 +37,24 @@ function detectWebGL(): boolean {
   }
 }
 
-export type PoolSceneProps = PoolSceneConfig
+export type PoolSceneProps = PoolSceneConfig & {
+  // Optional escape hatch for capturing this scene's rendered pixels (used
+  // by the admin photoreal-preview tool to grab a guide image to hand to
+  // the AI repaint step -- see src/admin/PhotorealPreviewDashboard.tsx).
+  // Fires once, from inside onCreated, with the actual <canvas> element
+  // react-three-fiber is drawing into. Ordinary site usage (PoolVisual.tsx)
+  // never passes this.
+  onCanvasReady?: (canvas: HTMLCanvasElement) => void
+  // WebGL clears its drawing buffer right after compositing a frame to the
+  // screen unless told to keep it around -- so canvas.toDataURL() can
+  // silently return a blank image depending on exactly when it's called,
+  // unless this is on. It costs a little performance, which is why it's
+  // opt-in rather than always-on for every visitor: only the admin capture
+  // tool needs to actually read pixels back out of the canvas.
+  preserveDrawingBuffer?: boolean
+}
 
-export default function PoolScene(props: PoolSceneProps) {
+export default function PoolScene({ onCanvasReady, preserveDrawingBuffer, ...props }: PoolSceneProps) {
   const [webglAvailable, setWebglAvailable] = useState(true)
   useEffect(() => {
     setWebglAvailable(detectWebGL())
@@ -96,7 +111,12 @@ export default function PoolScene(props: PoolSceneProps) {
     <Canvas
       shadows
       dpr={[1, 2]}
-      gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.05 }}
+      gl={{
+        antialias: true,
+        toneMapping: THREE.ACESFilmicToneMapping,
+        toneMappingExposure: 1.05,
+        preserveDrawingBuffer: Boolean(preserveDrawingBuffer),
+      }}
       camera={{ fov: FOV_DEGREES, near: 0.5, far: 500, position: [camX, camY, camZ] }}
       onCreated={(state) => {
         state.camera.lookAt(cameraTarget)
@@ -113,6 +133,8 @@ export default function PoolScene(props: PoolSceneProps) {
         const envRenderTarget = pmrem.fromScene(buildStudioEnvironmentScene(), 0.04)
         state.scene.environment = envRenderTarget.texture
         pmrem.dispose()
+
+        onCanvasReady?.(state.gl.domElement)
       }}
     >
       <ambientLight intensity={0.35} />

@@ -13,6 +13,7 @@ import AdminPhotosAboveGroundPage from './admin/AdminPhotosAboveGroundPage'
 import AdminExtrasPage from './admin/AdminExtrasPage'
 import AdminPhotosCoversPage from './admin/AdminPhotosCoversPage'
 import AdminPhotosComponentsPage from './admin/AdminPhotosComponentsPage'
+import AdminPhotorealPage from './admin/AdminPhotorealPage'
 import './index.css'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
@@ -33,6 +34,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         <Route path="/admin/photos/extras" element={<AdminExtrasPage />} />
         <Route path="/admin/photos/covers" element={<AdminPhotosCoversPage />} />
         <Route path="/admin/photos/components" element={<AdminPhotosComponentsPage />} />
+        <Route path="/admin/photoreal" element={<AdminPhotorealPage />} />
       </Routes>
     </BrowserRouter>
   </React.StrictMode>,

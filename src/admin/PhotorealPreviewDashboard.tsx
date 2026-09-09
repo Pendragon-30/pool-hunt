@@ -1,0 +1,404 @@
+import { Suspense, lazy, useMemo, useRef, useState } from 'react'
+import { supabase } from '../lib/supabaseClient'
+import type { AboveGroundShapeId, ConstructionId, InGroundShapeId, PoolType } from '../three/poolGeometry'
+import type { ExtraSlug } from '../three/extras'
+
+const PoolScene = lazy(() => import('../three/PoolScene'))
+
+// This page is the review step for the "hybrid" pool preview approach: the
+// live Three.js scene (which guarantees correct shape/size/camera framing/
+// accessory placement, but has a hard ceiling on photographic realism no
+// matter how much the primitive geometry and lighting are tuned) is
+// screenshotted as a "guide image," then handed to the generate-pool-render
+// edge function, which asks Gemini to repaint it as a real photograph while
+// treating the guide's composition as fixed. This page exists to look at a
+// batch of results -- quality, generation time -- before this pipeline is
+// ever wired into the live lead form. See generate-pool-render/index.ts
+// (Supabase project bpgirvmsgfqowgfwlhow) for the actual prompt.
+
+const INGROUND_SHAPES: { value: InGroundShapeId; label: string }[] = [
+  { value: 'rectangle', label: 'Rectangle' },
+  { value: 'freeform', label: 'Freeform' },
+  { value: 'kidney', label: 'Kidney' },
+  { value: 'oval', label: 'Oval' },
+  { value: 'round', label: 'Round' },
+  { value: 'lap', label: 'Lap pool' },
+]
+
+const ABOVE_GROUND_SHAPES: { value: AboveGroundShapeId; label: string }[] = [
+  { value: 'round', label: 'Round' },
+  { value: 'oval', label: 'Oval' },
+]
+
+const INGROUND_CONSTRUCTIONS: { value: ConstructionId; label: string }[] = [
+  { value: 'fiberglass', label: 'Fiberglass' },
+  { value: 'vinyl_liner', label: 'Vinyl liner' },
+  { value: 'concrete_gunite', label: 'Concrete / gunite' },
+]
+
+const COVERS = [
+  { value: 'none', label: 'No cover' },
+  { value: 'manual', label: 'Manual cover' },
+  { value: 'automatic', label: 'Automatic cover' },
+  { value: 'safety_cover', label: 'Safety cover' },
+]
+
+const EXTRA_OPTIONS: { value: ExtraSlug; label: string }[] = [
+  { value: 'slide', label: 'Slide' },
+  { value: 'natural_slide', label: 'Natural Slide' },
+  { value: 'water_feature', label: 'Water Feature' },
+  { value: 'swim_up_bar', label: 'Swim-Up Bar' },
+  { value: 'tanning_ledge', label: 'Tanning Ledge' },
+  { value: 'diving_board', label: 'Diving Board' },
+  { value: 'hot_tub_spa_combo', label: 'Hot Tub / Spa Combo' },
+  { value: 'waterfall', label: 'Waterfall' },
+]
+
+const CONSTRUCTION_DESCRIPTIONS: Record<ConstructionId, string> = {
+  fiberglass: 'a fiberglass shell with a smooth, glossy light-blue gel-coat finish',
+  vinyl_liner: 'a vinyl-liner pool with a printed medium-blue liner pattern',
+  concrete_gunite: 'a concrete/gunite pool with a pebble-finish plaster in a deep blue-grey tone',
+}
+
+const EXTRA_DESCRIPTIONS: Record<ExtraSlug, string> = {
+  slide: 'a standard residential pool slide',
+  natural_slide: 'a natural rock-style pool slide',
+  water_feature: 'a laminar deck-jet water feature at the pool edge',
+  swim_up_bar: 'a swim-up bar with underwater stools, right at the pool edge',
+  tanning_ledge: 'a shallow tanning ledge with loungers on it, at the pool edge',
+  diving_board: 'a diving board at one end of the pool',
+  hot_tub_spa_combo: 'a wood-paneled hot tub / spa in a corner of the deck',
+  waterfall: 'a natural rock waterfall feature',
+}
+
+type Config = {
+  poolType: PoolType
+  shape: InGroundShapeId | AboveGroundShapeId
+  construction: ConstructionId
+  cover: string
+  extras: ExtraSlug[]
+  ledLighting: boolean
+}
+
+function buildSceneDescription(config: Config): string {
+  const parts: string[] = []
+  if (config.poolType === 'above_ground') {
+    parts.push(
+      `An above-ground ${config.shape} swimming pool with a raised metal/resin wall over a vinyl liner, sitting on the ground.`,
+    )
+  } else {
+    parts.push(
+      `An inground ${config.shape} swimming pool built with ${CONSTRUCTION_DESCRIPTIONS[config.construction]}, ` +
+        'set flush into a poured-concrete deck with a plain grassy yard beyond it.',
+    )
+  }
+  if (config.cover !== 'none') {
+    parts.push(`The pool's water surface is covered by a ${config.cover.replace(/_/g, ' ')}.`)
+  }
+  if (config.extras.length > 0) {
+    const items = config.extras.map((slug) => EXTRA_DESCRIPTIONS[slug])
+    parts.push(`Accessories placed on the deck (exactly one of each, at the positions shown): ${items.join('; ')}.`)
+  }
+  if (config.ledLighting) {
+    parts.push(
+      'The pool has underwater LED lighting -- shown in the mockup as a bright glowing blue line traced along ' +
+        "the pool's edge at the waterline -- which should read as a real underwater light glow in the photo.",
+    )
+  }
+  return parts.join(' ')
+}
+
+type GuideCaptureProps = {
+  config: Config
+  onCaptured: (dataUrl: string) => void
+}
+
+// Mounts the real scene off in a fixed-size box purely to screenshot it --
+// remounted fresh (via the `key` the parent puts on this whole subtree)
+// every time the config changes, so onCreated reliably fires once per
+// config and there's a single unambiguous point to trigger the capture
+// from, rather than trying to detect "the scene settled" after a live prop
+// change.
+function GuideCapture({ config, onCaptured }: GuideCaptureProps) {
+  const captured = useRef(false)
+
+  const handleCanvasReady = (canvas: HTMLCanvasElement) => {
+    captured.current = false
+    // Wait a handful of animation frames past the first one so the shadow
+    // map has actually rendered (it refines over the first few frames)
+    // before grabbing pixels -- capturing on frame 0 risks an
+    // under-baked/missing shadow in the guide.
+    let framesLeft = 6
+    const step = () => {
+      if (captured.current) return
+      framesLeft -= 1
+      if (framesLeft > 0) {
+        requestAnimationFrame(step)
+        return
+      }
+      captured.current = true
+      try {
+        onCaptured(canvas.toDataURL('image/png'))
+      } catch (err) {
+        console.error('Failed to capture guide image', err)
+      }
+    }
+    requestAnimationFrame(step)
+  }
+
+  return (
+    <PoolScene
+      poolType={config.poolType}
+      shape={config.shape}
+      construction={config.construction}
+      cover={config.cover}
+      extras={config.extras}
+      ledLighting={config.ledLighting}
+      preserveDrawingBuffer
+      onCanvasReady={handleCanvasReady}
+    />
+  )
+}
+
+type GenerationStatus = 'idle' | 'generating' | 'done' | 'error'
+
+export default function PhotorealPreviewDashboard() {
+  const [poolType, setPoolType] = useState<PoolType>('inground')
+  const [shape, setShape] = useState<InGroundShapeId | AboveGroundShapeId>('rectangle')
+  const [construction, setConstruction] = useState<ConstructionId>('fiberglass')
+  const [cover, setCover] = useState('none')
+  const [extras, setExtras] = useState<ExtraSlug[]>([])
+  const [ledLighting, setLedLighting] = useState(false)
+
+  const [guideDataUrl, setGuideDataUrl] = useState<string | null>(null)
+  const [resultDataUrl, setResultDataUrl] = useState<string | null>(null)
+  const [status, setStatus] = useState<GenerationStatus>('idle')
+  const [errorMessage, setErrorMessage] = useState('')
+  const [elapsedMs, setElapsedMs] = useState(0)
+  const timerRef = useRef<number | null>(null)
+
+  const config: Config = useMemo(
+    () => ({ poolType, shape, construction, cover, extras, ledLighting }),
+    [poolType, shape, construction, cover, extras, ledLighting],
+  )
+  const configKey = useMemo(() => JSON.stringify(config), [config])
+
+  const shapeOptions = poolType === 'above_ground' ? ABOVE_GROUND_SHAPES : INGROUND_SHAPES
+
+  const setPoolTypeAndDefaults = (next: PoolType) => {
+    setPoolType(next)
+    setShape(next === 'above_ground' ? 'round' : 'rectangle')
+    setConstruction(next === 'above_ground' ? 'vinyl_liner' : 'fiberglass')
+    setGuideDataUrl(null)
+    setResultDataUrl(null)
+    setStatus('idle')
+  }
+
+  const toggleExtra = (slug: ExtraSlug) => {
+    setExtras((prev) => (prev.includes(slug) ? prev.filter((s) => s !== slug) : [...prev, slug]))
+    setGuideDataUrl(null)
+    setResultDataUrl(null)
+    setStatus('idle')
+  }
+
+  const handleGuideCaptured = (dataUrl: string) => {
+    setGuideDataUrl(dataUrl)
+    setResultDataUrl(null)
+    setStatus('idle')
+  }
+
+  const generate = async () => {
+    if (!guideDataUrl) return
+    setStatus('generating')
+    setErrorMessage('')
+    setResultDataUrl(null)
+    const startedAt = Date.now()
+    setElapsedMs(0)
+    timerRef.current = window.setInterval(() => setElapsedMs(Date.now() - startedAt), 200)
+
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const accessToken = sessionData.session?.access_token
+      const guideImageBase64 = guideDataUrl.split(',')[1] ?? ''
+      const description = buildSceneDescription(config)
+
+      const { data, error } = await supabase.functions.invoke('generate-pool-render', {
+        body: { guideImageBase64, guideMimeType: 'image/png', description },
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+      })
+
+      if (error || !data?.dataBase64) {
+        setStatus('error')
+        setErrorMessage((data && (data as any).error) || error?.message || 'Unknown error')
+        return
+      }
+
+      setResultDataUrl(`data:${data.mimeType || 'image/png'};base64,${data.dataBase64}`)
+      setStatus('done')
+    } catch (err) {
+      setStatus('error')
+      setErrorMessage(err instanceof Error ? err.message : 'Failed to generate')
+    } finally {
+      if (timerRef.current) {
+        window.clearInterval(timerRef.current)
+        timerRef.current = null
+      }
+    }
+  }
+
+  return (
+    <main className="mx-auto max-w-6xl px-6 py-6">
+      <div className="mb-4">
+        <h1 className="text-lg font-semibold text-slate-900">AI photoreal preview (review only)</h1>
+        <p className="text-sm text-slate-500">
+          The 3D scene on the left is captured as a guide image, then handed to Gemini to repaint as a real photo on
+          the right. Nothing here is shown to site visitors yet -- this is purely for checking quality and
+          generation time before wiring it into the live form.
+        </p>
+      </div>
+
+      <div className="mb-6 grid grid-cols-1 gap-4 rounded-xl border bg-white p-4 sm:grid-cols-2 lg:grid-cols-4">
+        <label className="block text-sm font-medium text-slate-700">
+          Pool type
+          <select
+            className="mt-1 block w-full rounded-lg border px-2 py-1.5 text-sm"
+            value={poolType}
+            onChange={(e) => setPoolTypeAndDefaults(e.target.value as PoolType)}
+          >
+            <option value="inground">Inground</option>
+            <option value="above_ground">Above-ground</option>
+          </select>
+        </label>
+
+        <label className="block text-sm font-medium text-slate-700">
+          Shape
+          <select
+            className="mt-1 block w-full rounded-lg border px-2 py-1.5 text-sm"
+            value={shape}
+            onChange={(e) => {
+              setShape(e.target.value as InGroundShapeId | AboveGroundShapeId)
+              setGuideDataUrl(null)
+              setResultDataUrl(null)
+              setStatus('idle')
+            }}
+          >
+            {shapeOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        {poolType === 'inground' && (
+          <label className="block text-sm font-medium text-slate-700">
+            Construction
+            <select
+              className="mt-1 block w-full rounded-lg border px-2 py-1.5 text-sm"
+              value={construction}
+              onChange={(e) => {
+                setConstruction(e.target.value as ConstructionId)
+                setGuideDataUrl(null)
+                setResultDataUrl(null)
+                setStatus('idle')
+              }}
+            >
+              {INGROUND_CONSTRUCTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+
+        <label className="block text-sm font-medium text-slate-700">
+          Cover
+          <select
+            className="mt-1 block w-full rounded-lg border px-2 py-1.5 text-sm"
+            value={cover}
+            onChange={(e) => {
+              setCover(e.target.value)
+              setGuideDataUrl(null)
+              setResultDataUrl(null)
+              setStatus('idle')
+            }}
+          >
+            {COVERS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+          <input
+            type="checkbox"
+            checked={ledLighting}
+            onChange={(e) => {
+              setLedLighting(e.target.checked)
+              setGuideDataUrl(null)
+              setResultDataUrl(null)
+              setStatus('idle')
+            }}
+          />
+          LED Lighting
+        </label>
+
+        <div className="col-span-full">
+          <div className="mb-1 text-sm font-medium text-slate-700">Fun extras</div>
+          <div className="flex flex-wrap gap-x-4 gap-y-2">
+            {EXTRA_OPTIONS.map((opt) => (
+              <label key={opt.value} className="flex items-center gap-1.5 text-sm text-slate-600">
+                <input type="checkbox" checked={extras.includes(opt.value)} onChange={() => toggleExtra(opt.value)} />
+                {opt.label}
+              </label>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="rounded-xl border bg-white p-4">
+          <div className="mb-2 text-sm font-medium text-slate-900">3D guide (captured automatically)</div>
+          <div className="aspect-[4/3] w-full overflow-hidden rounded-lg bg-slate-100">
+            <Suspense
+              fallback={
+                <div className="flex h-full w-full items-center justify-center text-sm text-slate-400">Loading…</div>
+              }
+            >
+              <GuideCapture key={configKey} config={config} onCaptured={handleGuideCaptured} />
+            </Suspense>
+          </div>
+          {guideDataUrl && (
+            <button
+              onClick={generate}
+              disabled={status === 'generating'}
+              className="mt-3 w-full rounded-lg bg-sky-700 px-4 py-2 text-sm font-medium text-white hover:bg-sky-800 disabled:opacity-50"
+            >
+              {status === 'generating' ? `Generating… (${(elapsedMs / 1000).toFixed(1)}s)` : 'Generate photorealistic version'}
+            </button>
+          )}
+        </div>
+
+        <div className="rounded-xl border bg-white p-4">
+          <div className="mb-2 text-sm font-medium text-slate-900">AI photoreal result</div>
+          <div className="aspect-[4/3] w-full overflow-hidden rounded-lg bg-slate-100">
+            {resultDataUrl ? (
+              <img src={resultDataUrl} alt="AI photoreal result" className="h-full w-full object-cover" />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center text-center text-sm text-slate-400">
+                {status === 'generating' ? 'Waiting on Gemini…' : 'Not generated yet'}
+              </div>
+            )}
+          </div>
+          {status === 'error' && <div className="mt-2 text-xs text-red-600">{errorMessage}</div>}
+          {status === 'done' && (
+            <div className="mt-2 text-xs text-slate-500">Generated in {(elapsedMs / 1000).toFixed(1)}s.</div>
+          )}
+        </div>
+      </div>
+    </main>
+  )
+}
