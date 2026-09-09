@@ -69,7 +69,7 @@ export default function PoolScene({ onCanvasReady, preserveDrawingBuffer, ...pro
   const built = useMemo(
     () => buildPoolScene(props),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [props.poolType, props.shape, props.construction, props.cover, props.ledLighting, extrasKey],
+    [props.poolType, props.shape, props.construction, props.size, props.cover, props.ledLighting, extrasKey],
   )
 
   // Dispose the previous scene's geometries when a new one replaces it (or

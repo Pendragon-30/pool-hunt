@@ -1,6 +1,6 @@
 import { Suspense, lazy, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
-import type { AboveGroundShapeId, ConstructionId, InGroundShapeId, PoolType } from '../three/poolGeometry'
+import type { AboveGroundShapeId, ConstructionId, InGroundShapeId, PoolSize, PoolType } from '../three/poolGeometry'
 import type { ExtraSlug } from '../three/extras'
 
 const PoolScene = lazy(() => import('../three/PoolScene'))
@@ -34,6 +34,12 @@ const INGROUND_CONSTRUCTIONS: { value: ConstructionId; label: string }[] = [
   { value: 'fiberglass', label: 'Fiberglass' },
   { value: 'vinyl_liner', label: 'Vinyl liner' },
   { value: 'concrete_gunite', label: 'Concrete / gunite' },
+]
+
+const SIZES: { value: PoolSize; label: string }[] = [
+  { value: 'small', label: 'Small' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'large', label: 'Large' },
 ]
 
 const COVERS = [
@@ -75,20 +81,28 @@ type Config = {
   poolType: PoolType
   shape: InGroundShapeId | AboveGroundShapeId
   construction: ConstructionId
+  size: PoolSize
   cover: string
   extras: ExtraSlug[]
   ledLighting: boolean
 }
 
+const SIZE_DESCRIPTIONS: Record<PoolSize, string> = {
+  small: 'small',
+  medium: 'mid-size',
+  large: 'large',
+}
+
 function buildSceneDescription(config: Config): string {
   const parts: string[] = []
+  const sizeWord = SIZE_DESCRIPTIONS[config.size]
   if (config.poolType === 'above_ground') {
     parts.push(
-      `An above-ground ${config.shape} swimming pool with a raised metal/resin wall over a vinyl liner, sitting on the ground.`,
+      `An above-ground, ${sizeWord} ${config.shape} swimming pool with a raised metal/resin wall over a vinyl liner, sitting on the ground.`,
     )
   } else {
     parts.push(
-      `An inground ${config.shape} swimming pool built with ${CONSTRUCTION_DESCRIPTIONS[config.construction]}, ` +
+      `An inground, ${sizeWord} ${config.shape} swimming pool built with ${CONSTRUCTION_DESCRIPTIONS[config.construction]}, ` +
         'set flush into a poured-concrete deck with a plain grassy yard beyond it.',
     )
   }
@@ -151,6 +165,7 @@ function GuideCapture({ config, onCaptured }: GuideCaptureProps) {
       poolType={config.poolType}
       shape={config.shape}
       construction={config.construction}
+      size={config.size}
       cover={config.cover}
       extras={config.extras}
       ledLighting={config.ledLighting}
@@ -166,6 +181,7 @@ export default function PhotorealPreviewDashboard() {
   const [poolType, setPoolType] = useState<PoolType>('inground')
   const [shape, setShape] = useState<InGroundShapeId | AboveGroundShapeId>('rectangle')
   const [construction, setConstruction] = useState<ConstructionId>('fiberglass')
+  const [size, setSize] = useState<PoolSize>('medium')
   const [cover, setCover] = useState('none')
   const [extras, setExtras] = useState<ExtraSlug[]>([])
   const [ledLighting, setLedLighting] = useState(false)
@@ -178,8 +194,8 @@ export default function PhotorealPreviewDashboard() {
   const timerRef = useRef<number | null>(null)
 
   const config: Config = useMemo(
-    () => ({ poolType, shape, construction, cover, extras, ledLighting }),
-    [poolType, shape, construction, cover, extras, ledLighting],
+    () => ({ poolType, shape, construction, size, cover, extras, ledLighting }),
+    [poolType, shape, construction, size, cover, extras, ledLighting],
   )
   const configKey = useMemo(() => JSON.stringify(config), [config])
 
@@ -311,6 +327,26 @@ export default function PhotorealPreviewDashboard() {
             </select>
           </label>
         )}
+
+        <label className="block text-sm font-medium text-slate-700">
+          Size
+          <select
+            className="mt-1 block w-full rounded-lg border px-2 py-1.5 text-sm"
+            value={size}
+            onChange={(e) => {
+              setSize(e.target.value as PoolSize)
+              setGuideDataUrl(null)
+              setResultDataUrl(null)
+              setStatus('idle')
+            }}
+          >
+            {SIZES.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </label>
 
         <label className="block text-sm font-medium text-slate-700">
           Cover

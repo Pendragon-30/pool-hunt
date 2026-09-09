@@ -14,6 +14,7 @@ export type PoolType = 'inground' | 'above_ground'
 export type InGroundShapeId = 'rectangle' | 'freeform' | 'kidney' | 'oval' | 'round' | 'lap'
 export type AboveGroundShapeId = 'round' | 'oval'
 export type ConstructionId = 'fiberglass' | 'vinyl_liner' | 'concrete_gunite'
+export type PoolSize = 'small' | 'medium' | 'large'
 
 export const INGROUND_SHAPES: InGroundShapeId[] = ['rectangle', 'freeform', 'kidney', 'oval', 'round', 'lap']
 export const ABOVE_GROUND_SHAPES: AboveGroundShapeId[] = ['round', 'oval']
@@ -26,6 +27,10 @@ export const INGROUND_DEPTH_FT = 4.5
 export const INGROUND_DECK_THICKNESS_FT = 0.4
 export const ABOVE_GROUND_WALL_THICKNESS_FT = 0.25
 
+// Baseline ("medium") real-world footprints. SIZE_MULTIPLIERS below scales
+// both dimensions of whichever shape is picked, so a "large" freeform pool
+// is still recognizably the same freeform outline, just bigger -- not a
+// differently-shaped pool.
 export const INGROUND_DIMENSIONS: Record<InGroundShapeId, { width: number; length: number }> = {
   rectangle: { width: 16, length: 32 },
   oval: { width: 15, length: 30 },
@@ -38,6 +43,36 @@ export const INGROUND_DIMENSIONS: Record<InGroundShapeId, { width: number; lengt
 export const ABOVE_GROUND_DIMENSIONS: Record<AboveGroundShapeId, { width: number; length: number; wallHeight: number }> = {
   round: { width: 24, length: 24, wallHeight: 4 },
   oval: { width: 12, length: 24, wallHeight: 4 },
+}
+
+// Scales footprint width/length only -- basin depth (INGROUND_DEPTH_FT) and
+// above-ground wall height stay constant across sizes. That's a deliberate
+// simplification (real pools do vary a little in depth by size) rather than
+// an oversight: depth-dependent values elsewhere (camera target height,
+// water-line offsets) were tuned against a fixed depth, and real-world
+// above-ground pool walls in particular are close to a standard height
+// regardless of diameter, so footprint is what actually reads as "size" to
+// a shopper anyway.
+export const SIZE_MULTIPLIERS: Record<PoolSize, number> = {
+  small: 0.7,
+  medium: 1,
+  large: 1.35,
+}
+
+function scaleDims<T extends { width: number; length: number }>(dims: T, size: PoolSize): T {
+  const mult = SIZE_MULTIPLIERS[size]
+  return { ...dims, width: dims.width * mult, length: dims.length * mult }
+}
+
+export function getInGroundDimensions(shape: InGroundShapeId, size: PoolSize): { width: number; length: number } {
+  return scaleDims(INGROUND_DIMENSIONS[shape], size)
+}
+
+export function getAboveGroundDimensions(
+  shape: AboveGroundShapeId,
+  size: PoolSize,
+): { width: number; length: number; wallHeight: number } {
+  return scaleDims(ABOVE_GROUND_DIMENSIONS[shape], size)
 }
 
 function roundedRectShape(width: number, length: number, radius: number): THREE.Shape {
@@ -110,8 +145,8 @@ const KIDNEY_RADIUS_MULTIPLIERS = [1.0, 0.95, 1.05, 0.9, 0.6, 0.8, 1.1, 0.95]
 // asymmetric "lagoon" outline, distinct from the kidney's waist.
 const FREEFORM_RADIUS_MULTIPLIERS = [1.0, 1.08, 0.92, 1.1, 0.85, 1.05, 0.95, 1.02]
 
-export function getInGroundOutlineShape(shape: InGroundShapeId): THREE.Shape {
-  const { width, length } = INGROUND_DIMENSIONS[shape]
+export function getInGroundOutlineShape(shape: InGroundShapeId, size: PoolSize = 'medium'): THREE.Shape {
+  const { width, length } = getInGroundDimensions(shape, size)
   switch (shape) {
     case 'rectangle':
       return roundedRectShape(width, length, 1)
@@ -128,8 +163,8 @@ export function getInGroundOutlineShape(shape: InGroundShapeId): THREE.Shape {
   }
 }
 
-export function getAboveGroundOutlineShape(shape: AboveGroundShapeId): THREE.Shape {
-  const { width, length } = ABOVE_GROUND_DIMENSIONS[shape]
+export function getAboveGroundOutlineShape(shape: AboveGroundShapeId, size: PoolSize = 'medium'): THREE.Shape {
+  const { width, length } = getAboveGroundDimensions(shape, size)
   return ellipseShape(width, length)
 }
 
@@ -164,12 +199,16 @@ export function getOutlineBounds(points: THREE.Vector2[]): { width: number; leng
 // wildly different real-world sizes (an 18ft round pool vs. a 40ft lap
 // pool) -- every scene fills the frame by roughly the same proportion no
 // matter which shape is showing.
-export function getSceneFootprint(poolType: PoolType, shape: InGroundShapeId | AboveGroundShapeId): { width: number; length: number } {
+export function getSceneFootprint(
+  poolType: PoolType,
+  shape: InGroundShapeId | AboveGroundShapeId,
+  size: PoolSize = 'medium',
+): { width: number; length: number } {
   if (poolType === 'above_ground') {
-    const dims = ABOVE_GROUND_DIMENSIONS[shape as AboveGroundShapeId]
+    const dims = getAboveGroundDimensions(shape as AboveGroundShapeId, size)
     return { width: dims.width, length: dims.length }
   }
-  const dims = INGROUND_DIMENSIONS[shape as InGroundShapeId]
+  const dims = getInGroundDimensions(shape as InGroundShapeId, size)
   return { width: dims.width + INGROUND_DECK_MARGIN_FT * 2, length: dims.length + INGROUND_DECK_MARGIN_FT * 2 }
 }
 

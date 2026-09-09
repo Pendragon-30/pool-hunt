@@ -1,7 +1,12 @@
-import { useEffect, useState } from 'react'
+import { Suspense, lazy, useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import type { Tables } from '../lib/database.types'
-import PoolVisual from './PoolVisual'
+import PoolVisual, { resolvePoolVisualConfig, type ResolvedPoolVisualConfig } from './PoolVisual'
+
+// Loaded lazily purely for the post-submit guide capture (see
+// PhotorealReveal below) -- the visible preview during the form itself
+// already loads its own copy of this chunk via PoolVisual.
+const PoolScene = lazy(() => import('../three/PoolScene'))
 
 type FunFeature = Tables<'fun_features'>
 
@@ -29,6 +34,17 @@ const ABOVE_GROUND_SHAPES = [
   { value: 'round', label: 'Round' },
   { value: 'oval', label: 'Oval' },
   { value: 'undecided', label: "I'm not sure yet" },
+]
+
+// Kept in the same S/M/L order the admin dashboard uses (see SIZE_MULTIPLIERS
+// in src/three/poolGeometry.ts) -- these are the only real sizes; there's no
+// "I'm not sure yet" here because the 3D preview and the final photoreal
+// render both need a concrete size to scale against, and "medium" is already
+// the sensible default when someone hasn't thought about it yet.
+const SIZES = [
+  { value: 'small', label: 'Small' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'large', label: 'Large' },
 ]
 
 const CONSTRUCTIONS = [
@@ -169,6 +185,7 @@ export default function LeadForm() {
   const [poolType, setPoolType] = useState('')
   const [shape, setShape] = useState('')
   const [construction, setConstruction] = useState('')
+  const [poolSize, setPoolSize] = useState('')
   const [filtration, setFiltration] = useState('')
   const [heater, setHeater] = useState('')
   const [cover, setCover] = useState('')
@@ -183,6 +200,16 @@ export default function LeadForm() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [submitted, setSubmitted] = useState(false)
+
+  // The photoreal AI render is generated exactly once per lead, kicked off
+  // only after the contact-info step is submitted -- not live while
+  // someone is still adjusting selections. That both keeps the (paid,
+  // ~20s) Gemini call off the hot path of every form interaction and turns
+  // "see a real photo of your exact pool" into a reason to finish the
+  // form rather than abandon it partway through. See PhotorealReveal below.
+  const [renderPhase, setRenderPhase] = useState<'idle' | 'capturing' | 'generating' | 'ready' | 'unavailable' | 'error'>('idle')
+  const [renderUrl, setRenderUrl] = useState<string | null>(null)
+  const [renderConfig, setRenderConfig] = useState<ResolvedPoolVisualConfig | null>(null)
 
   const [step, setStep] = useState(0)
 
@@ -243,6 +270,7 @@ export default function LeadForm() {
       pool_type: poolType || null,
       shape: shape || null,
       construction: construction || null,
+      pool_size: poolSize || null,
       filtration: filtration || null,
       heater: heater || null,
       cover: cover || null,
@@ -265,19 +293,35 @@ export default function LeadForm() {
       )
     }
 
+    // Freeze the exact resolved scene config this lead's preview was
+    // showing at the moment they submitted -- selections are locked from
+    // here on, so the guide image captured next (and the description sent
+    // to Gemini) always matches what they actually saw and asked for.
+    setRenderConfig(
+      resolvePoolVisualConfig({
+        poolType,
+        shape,
+        construction,
+        size: poolSize,
+        cover,
+        selectedFeatures: features.filter((f) => selectedFeatureIds.includes(f.id)).map((f) => f.name),
+      }),
+    )
+    setRenderPhase('capturing')
     setSubmitting(false)
     setSubmitted(true)
   }
 
   if (submitted) {
     return (
-      <div className="mx-auto max-w-xl rounded-xl border bg-white p-8 text-center shadow-sm">
-        <h2 className="text-2xl font-bold text-sky-700">You're all set!</h2>
-        <p className="mt-2 text-slate-600">
-          Thanks, {name.split(' ')[0] || 'there'} — we're matching you with a
-          pool dealer in your area. Expect to hear from them soon.
-        </p>
-      </div>
+      <PhotorealReveal
+        firstName={name.split(' ')[0] || 'there'}
+        config={renderConfig}
+        phase={renderPhase}
+        setPhase={setRenderPhase}
+        renderUrl={renderUrl}
+        setRenderUrl={setRenderUrl}
+      />
     )
   }
 
@@ -307,6 +351,7 @@ export default function LeadForm() {
                   onChange={setConstruction}
                   options={constructionOptions}
                 />
+                <SelectField label="Pool size" value={poolSize} onChange={setPoolSize} options={SIZES} />
                 <SelectField
                   label="Filtration"
                   value={filtration}
@@ -362,6 +407,10 @@ export default function LeadForm() {
           {step === 3 && (
             <div>
               <h2 className="text-lg font-semibold">{STEPS[3].title}</h2>
+              <p className="mt-1 text-sm text-sky-700">
+                Submit your info and we'll turn your preview into a photorealistic rendering of your exact
+                pool — free, and yours to keep.
+              </p>
               <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <label className="block text-sm font-medium text-slate-700">
                   Name
@@ -445,6 +494,7 @@ export default function LeadForm() {
             poolType={poolType}
             shape={shape}
             construction={construction}
+            size={poolSize}
             filtration={filtration}
             heater={heater}
             cover={cover}
@@ -458,6 +508,179 @@ export default function LeadForm() {
           </p>
         </div>
       </div>
+    </div>
+  )
+}
+
+type RenderPhase = 'idle' | 'capturing' | 'generating' | 'ready' | 'unavailable' | 'error'
+
+// A generated combo that's genuinely new to the whole site takes Gemini
+// roughly 15-25s (see the ~19-20s times seen in the admin review tool) --
+// polling only kicks in on the much rarer case where this exact combo is
+// already being generated for someone else right now, so a handful of
+// slow-ish checks is plenty rather than fast/frequent ones.
+const POLL_INTERVAL_MS = 4000
+const MAX_POLL_ATTEMPTS = 10
+
+type GuideCaptureProps = {
+  config: ResolvedPoolVisualConfig
+  onCaptured: (dataUrl: string) => void
+}
+
+// Mirrors the admin dashboard's GuideCapture (src/admin/PhotorealPreviewDashboard.tsx):
+// mounts the real scene purely to screenshot it, waiting a handful of
+// frames past the first so the shadow map has actually settled before
+// grabbing pixels.
+function GuideCapture({ config, onCaptured }: GuideCaptureProps) {
+  const captured = useRef(false)
+
+  const handleCanvasReady = (canvas: HTMLCanvasElement) => {
+    let framesLeft = 6
+    const step = () => {
+      if (captured.current) return
+      framesLeft -= 1
+      if (framesLeft > 0) {
+        requestAnimationFrame(step)
+        return
+      }
+      captured.current = true
+      try {
+        onCaptured(canvas.toDataURL('image/png'))
+      } catch (err) {
+        console.error('Failed to capture guide image', err)
+      }
+    }
+    requestAnimationFrame(step)
+  }
+
+  return (
+    <PoolScene
+      poolType={config.poolType}
+      shape={config.shape}
+      construction={config.construction}
+      size={config.size}
+      cover={config.cover}
+      extras={config.extras}
+      ledLighting={config.ledLighting}
+      preserveDrawingBuffer
+      onCanvasReady={handleCanvasReady}
+    />
+  )
+}
+
+function PhotorealReveal({
+  firstName,
+  config,
+  phase,
+  setPhase,
+  renderUrl,
+  setRenderUrl,
+}: {
+  firstName: string
+  config: ResolvedPoolVisualConfig | null
+  phase: RenderPhase
+  setPhase: (p: RenderPhase) => void
+  renderUrl: string | null
+  setRenderUrl: (u: string | null) => void
+}) {
+  const [guideDataUrl, setGuideDataUrl] = useState<string | null>(null)
+  const requestedRef = useRef(false)
+
+  // If WebGL isn't available (or the scene otherwise never fires
+  // onCanvasReady), GuideCapture never calls handleCaptured and the phase
+  // would sit on 'capturing' -- spinner forever -- with no photo and no
+  // fallback message. Give it a few seconds, then quietly fall back to
+  // just the thank-you message rather than leave the page looking stuck.
+  useEffect(() => {
+    if (phase !== 'capturing') return
+    const timeout = window.setTimeout(() => {
+      if (!requestedRef.current) setPhase('unavailable')
+    }, 8000)
+    return () => window.clearTimeout(timeout)
+  }, [phase, setPhase])
+
+  const requestRender = async (dataUrl: string, cfg: ResolvedPoolVisualConfig, attempt: number) => {
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-pool-render-public', {
+        body: {
+          poolType: cfg.poolType,
+          shape: cfg.shape,
+          construction: cfg.construction,
+          size: cfg.size,
+          cover: cfg.cover,
+          extras: cfg.extras,
+          ledLighting: cfg.ledLighting,
+          guideImageBase64: dataUrl.split(',')[1] ?? '',
+          guideMimeType: 'image/png',
+        },
+      })
+
+      if (error || !data) {
+        setPhase('error')
+        return
+      }
+      if (data.status === 'ready' && data.url) {
+        setRenderUrl(data.url)
+        setPhase('ready')
+        return
+      }
+      if (data.status === 'pending' && attempt < MAX_POLL_ATTEMPTS) {
+        window.setTimeout(() => requestRender(dataUrl, cfg, attempt + 1), POLL_INTERVAL_MS)
+        return
+      }
+      if (data.status === 'unavailable' || data.status === 'pending') {
+        setPhase('unavailable')
+        return
+      }
+      setPhase('error')
+    } catch {
+      setPhase('error')
+    }
+  }
+
+  const handleCaptured = (dataUrl: string) => {
+    if (requestedRef.current || !config) return
+    requestedRef.current = true
+    setGuideDataUrl(dataUrl)
+    setPhase('generating')
+    requestRender(dataUrl, config, 0)
+  }
+
+  return (
+    <div className="mx-auto max-w-xl rounded-xl border bg-white p-8 text-center shadow-sm">
+      <h2 className="text-2xl font-bold text-sky-700">You're all set!</h2>
+      <p className="mt-2 text-slate-600">
+        Thanks, {firstName} — we're matching you with a pool dealer in your area. Expect to hear from them soon.
+      </p>
+
+      {config && phase !== 'unavailable' && phase !== 'error' && (
+        <div className="mt-6">
+          <div className="relative aspect-[4/3] w-full overflow-hidden rounded-lg bg-slate-100">
+            {phase === 'ready' && renderUrl ? (
+              <img src={renderUrl} alt="Photorealistic rendering of your pool" className="h-full w-full object-cover" />
+            ) : guideDataUrl ? (
+              <img src={guideDataUrl} alt="Your pool preview" className="h-full w-full object-cover opacity-60 blur-sm" />
+            ) : (
+              <Suspense fallback={null}>
+                <GuideCapture config={config} onCaptured={handleCaptured} />
+              </Suspense>
+            )}
+            {phase !== 'ready' && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-white/40">
+                <div className="h-6 w-6 animate-spin rounded-full border-2 border-sky-700 border-t-transparent" />
+                <p className="px-4 text-xs font-medium text-slate-700">
+                  Creating a photorealistic rendering of your exact pool…
+                </p>
+              </div>
+            )}
+          </div>
+          {phase === 'ready' && (
+            <p className="mt-2 text-center text-xs text-slate-400">
+              Your dealer will confirm exact specs and pricing.
+            </p>
+          )}
+        </div>
+      )}
     </div>
   )
 }

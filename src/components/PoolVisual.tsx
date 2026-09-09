@@ -1,6 +1,6 @@
 import { Suspense, lazy } from 'react'
 import type { ExtraSlug } from '../three/extras'
-import type { AboveGroundShapeId, ConstructionId, InGroundShapeId } from '../three/poolGeometry'
+import type { AboveGroundShapeId, ConstructionId, InGroundShapeId, PoolSize } from '../three/poolGeometry'
 
 // Loaded lazily (its own chunk) so three.js + react-three-fiber -- which
 // nothing else on the site needs -- aren't part of the initial page
@@ -58,6 +58,12 @@ function getEffectiveConstruction(poolType: 'inground' | 'above_ground', constru
     : DEFAULT_CONSTRUCTION_BY_TYPE[poolType]
 }
 
+const REAL_SIZES: PoolSize[] = ['small', 'medium', 'large']
+
+function getEffectiveSize(size: string): PoolSize {
+  return REAL_SIZES.includes(size as PoolSize) ? (size as PoolSize) : 'medium'
+}
+
 type FeatureName =
   | 'Slide'
   | 'Natural Slide'
@@ -88,10 +94,50 @@ type PoolVisualProps = {
   poolType: string
   shape: string
   construction: string
+  size?: string
   filtration?: string
   heater?: string
   cover?: string
   selectedFeatures?: string[]
+}
+
+// The exact set of resolved, "real" values (no 'undecided'/'custom'/empty
+// placeholders) that this component hands to the live PoolScene. Exported
+// so anything else that needs to reproduce the identical 3D scene --
+// namely LeadForm's post-submit guide-capture step, which builds the
+// photoreal AI render from a screenshot of this same configuration -- can
+// derive it from the same single source of truth instead of re-deriving
+// (and risking drifting from) these defaulting rules itself.
+export type ResolvedPoolVisualConfig = {
+  poolType: 'inground' | 'above_ground'
+  shape: InGroundShapeId | AboveGroundShapeId
+  construction: ConstructionId
+  size: PoolSize
+  cover: string
+  extras: ExtraSlug[]
+  ledLighting: boolean
+}
+
+export function resolvePoolVisualConfig({
+  poolType,
+  shape,
+  construction,
+  size = '',
+  cover = '',
+  selectedFeatures = [],
+}: Pick<PoolVisualProps, 'poolType' | 'shape' | 'construction' | 'size' | 'cover' | 'selectedFeatures'>): ResolvedPoolVisualConfig {
+  const effectivePoolType = getEffectivePoolType(poolType)
+  return {
+    poolType: effectivePoolType,
+    shape: getEffectiveShape(effectivePoolType, shape),
+    construction: getEffectiveConstruction(effectivePoolType, construction),
+    size: getEffectiveSize(size),
+    cover: cover && cover !== 'undecided' ? cover : 'none',
+    extras: selectedFeatures
+      .filter((name): name is Exclude<FeatureName, 'LED Lighting'> => name !== 'LED Lighting' && name in FEATURE_SLUGS)
+      .map((name) => FEATURE_SLUGS[name]),
+    ledLighting: selectedFeatures.includes('LED Lighting'),
+  }
 }
 
 function PumpGlyph({ color }: { color: string }) {
@@ -140,6 +186,7 @@ export default function PoolVisual({
   poolType,
   shape,
   construction,
+  size = '',
   filtration = '',
   heater = '',
   cover = '',
@@ -148,6 +195,7 @@ export default function PoolVisual({
   const effectivePoolType = getEffectivePoolType(poolType)
   const effectiveShape = getEffectiveShape(effectivePoolType, shape)
   const effectiveConstruction = getEffectiveConstruction(effectivePoolType, construction)
+  const effectiveSize = getEffectiveSize(size)
 
   const hasCover = Boolean(cover) && cover !== 'none'
   const extraSlugs = selectedFeatures
@@ -192,6 +240,7 @@ export default function PoolVisual({
             poolType={effectivePoolType}
             shape={effectiveShape}
             construction={effectiveConstruction}
+            size={effectiveSize}
             cover={cover && cover !== 'undecided' ? cover : 'none'}
             extras={extraSlugs}
             ledLighting={selectedFeatures.includes('LED Lighting')}
@@ -201,6 +250,7 @@ export default function PoolVisual({
 
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t bg-white/70 px-4 py-2 text-xs text-slate-500">
         <span>{effectivePoolType === 'above_ground' ? 'Above-ground' : 'Inground'}</span>
+        <span className="capitalize">{effectiveSize}</span>
         <span>{CONSTRUCTION_LABELS[effectiveConstruction]}</span>
       </div>
 

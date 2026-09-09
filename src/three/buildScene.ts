@@ -1,6 +1,5 @@
 import * as THREE from 'three'
 import {
-  ABOVE_GROUND_DIMENSIONS,
   ABOVE_GROUND_WALL_THICKNESS_FT,
   INGROUND_DECK_MARGIN_FT,
   INGROUND_DEPTH_FT,
@@ -8,6 +7,7 @@ import {
   buildFlatOutlineGeometry,
   buildGroundWithHoleGeometry,
   buildWallStripGeometry,
+  getAboveGroundDimensions,
   getAboveGroundOutlineShape,
   getInGroundOutlineShape,
   getOutlineBounds,
@@ -17,6 +17,7 @@ import {
   type AboveGroundShapeId,
   type ConstructionId,
   type InGroundShapeId,
+  type PoolSize,
   type PoolType,
 } from './poolGeometry'
 import {
@@ -42,6 +43,8 @@ export type PoolSceneConfig = {
   poolType: PoolType
   shape: InGroundShapeId | AboveGroundShapeId
   construction: ConstructionId
+  /** Scales the pool's real-world footprint -- see SIZE_MULTIPLIERS in poolGeometry.ts. */
+  size: PoolSize
   /** 'none' or 'undecided' means no cover rendered. */
   cover: string
   extras: ExtraSlug[]
@@ -77,9 +80,16 @@ const FOV_DEGREES = 42
 const CAMERA_ELEVATION_DEG = 15
 const CAMERA_AZIMUTH_DEG = 35
 
-function buildInGroundScene(shape: InGroundShapeId, construction: ConstructionId, cover: string, extras: ExtraSlug[], ledLighting: boolean): THREE.Group {
+function buildInGroundScene(
+  shape: InGroundShapeId,
+  construction: ConstructionId,
+  size: PoolSize,
+  cover: string,
+  extras: ExtraSlug[],
+  ledLighting: boolean,
+): THREE.Group {
   const group = new THREE.Group()
-  const outlineShape = getInGroundOutlineShape(shape)
+  const outlineShape = getInGroundOutlineShape(shape, size)
   const localPoints = getOutlinePoints(outlineShape)
   const worldPoints = localPoints.map(outlinePointToWorldXZ)
   const bounds = getOutlineBounds(localPoints)
@@ -170,10 +180,16 @@ function enableShadows(object: THREE.Object3D): void {
   })
 }
 
-function buildAboveGroundScene(shape: AboveGroundShapeId, cover: string, extras: ExtraSlug[], ledLighting: boolean): THREE.Group {
+function buildAboveGroundScene(
+  shape: AboveGroundShapeId,
+  size: PoolSize,
+  cover: string,
+  extras: ExtraSlug[],
+  ledLighting: boolean,
+): THREE.Group {
   const group = new THREE.Group()
-  const dims = ABOVE_GROUND_DIMENSIONS[shape]
-  const outlineShape = getAboveGroundOutlineShape(shape)
+  const dims = getAboveGroundDimensions(shape, size)
+  const outlineShape = getAboveGroundOutlineShape(shape, size)
   const localPoints = getOutlinePoints(outlineShape)
   const worldPoints = localPoints.map(outlinePointToWorldXZ)
 
@@ -238,10 +254,17 @@ function buildAboveGroundScene(shape: AboveGroundShapeId, cover: string, extras:
 export function buildPoolScene(config: PoolSceneConfig): BuiltScene {
   const group =
     config.poolType === 'above_ground'
-      ? buildAboveGroundScene(config.shape as AboveGroundShapeId, config.cover, config.extras, config.ledLighting)
-      : buildInGroundScene(config.shape as InGroundShapeId, config.construction, config.cover, config.extras, config.ledLighting)
+      ? buildAboveGroundScene(config.shape as AboveGroundShapeId, config.size, config.cover, config.extras, config.ledLighting)
+      : buildInGroundScene(
+          config.shape as InGroundShapeId,
+          config.construction,
+          config.size,
+          config.cover,
+          config.extras,
+          config.ledLighting,
+        )
 
-  const footprint = getSceneFootprint(config.poolType, config.shape)
+  const footprint = getSceneFootprint(config.poolType, config.shape, config.size)
   // Extras extend a few feet beyond the pool+deck footprint, so pad the
   // framing radius a bit further out than the bare footprint would need,
   // keeping every combination comfortably inside the frame -- but only
@@ -255,7 +278,13 @@ export function buildPoolScene(config: PoolSceneConfig): BuiltScene {
   return {
     group,
     cameraDistance,
-    cameraTarget: new THREE.Vector3(0, config.poolType === 'above_ground' ? ABOVE_GROUND_DIMENSIONS[config.shape as AboveGroundShapeId].wallHeight / 2 : -0.6, 0),
+    cameraTarget: new THREE.Vector3(
+      0,
+      config.poolType === 'above_ground'
+        ? getAboveGroundDimensions(config.shape as AboveGroundShapeId, config.size).wallHeight / 2
+        : -0.6,
+      0,
+    ),
     cameraElevation: THREE.MathUtils.degToRad(CAMERA_ELEVATION_DEG),
     cameraAzimuth: THREE.MathUtils.degToRad(CAMERA_AZIMUTH_DEG),
     sceneRadius: boundingRadius,
