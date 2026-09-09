@@ -14,7 +14,10 @@ import { useState } from 'react'
 // around the deck — the same 8 slots regardless of which pool is shown, so
 // an extra always lands in the same place. Until a given extra's sticker
 // has been generated, it falls back to a simple hand-drawn icon badge in
-// the same spot so nothing is ever missing from the preview.
+// the same spot so nothing is ever missing from the preview. One extra,
+// "LED Lighting", isn't a sticker at all — it's a soft color glow rendered
+// directly onto the water, since a translucent lighting effect can't
+// survive the chroma-key background removal every sticker goes through.
 
 const SUPABASE_STORAGE_BASE = 'https://bpgirvmsgfqowgfwlhow.supabase.co/storage/v1/object/public/pool-photos'
 const FUN_EXTRAS_STORAGE_BASE = 'https://bpgirvmsgfqowgfwlhow.supabase.co/storage/v1/object/public/fun-extras'
@@ -64,6 +67,7 @@ function getPhotoConstruction(poolType: string, construction: string): string {
 
 type FeatureName =
   | 'Slide'
+  | 'Natural Slide'
   | 'Water Feature'
   | 'Swim-Up Bar'
   | 'Tanning Ledge'
@@ -72,19 +76,23 @@ type FeatureName =
   | 'Hot Tub / Spa Combo'
   | 'Waterfall'
 
-// Filenames for each extra's pre-generated sticker in the fun-extras bucket.
-const FEATURE_SLUGS: Record<FeatureName, string> = {
+// Filenames for each extra's pre-generated sticker in the fun-extras
+// bucket. "LED Lighting" is deliberately absent -- it isn't a positioned
+// sticker, it's a subtle color tint rendered directly onto the water (a
+// translucent glow can't survive the chroma-key removal every other sticker
+// goes through), so it's handled separately below.
+const FEATURE_SLUGS: Record<Exclude<FeatureName, 'LED Lighting'>, string> = {
   Slide: 'slide',
+  'Natural Slide': 'natural_slide',
   'Water Feature': 'water_feature',
   'Swim-Up Bar': 'swim_up_bar',
   'Tanning Ledge': 'tanning_ledge',
   'Diving Board': 'diving_board',
-  'LED Lighting': 'led_lighting',
   'Hot Tub / Spa Combo': 'hot_tub_spa_combo',
   Waterfall: 'waterfall',
 }
 
-function getExtraStickerUrl(name: FeatureName): string {
+function getExtraStickerUrl(name: Exclude<FeatureName, 'LED Lighting'>): string {
   return `${FUN_EXTRAS_STORAGE_BASE}/${FEATURE_SLUGS[name]}.png`
 }
 
@@ -189,13 +197,16 @@ function CoverGlyph({ color }: { color: string }) {
   )
 }
 
-const FEATURE_ORDER: FeatureName[] = [
+// The 8 extras that appear as positioned stickers. "LED Lighting" is not
+// here -- it renders as a water-color glow instead (see LedLightingGlow),
+// so it isn't part of the anchor system.
+const ANCHORED_FEATURE_ORDER: Exclude<FeatureName, 'LED Lighting'>[] = [
   'Slide',
+  'Natural Slide',
   'Water Feature',
   'Swim-Up Bar',
   'Tanning Ledge',
   'Diving Board',
-  'LED Lighting',
   'Hot Tub / Spa Combo',
   'Waterfall',
 ]
@@ -218,6 +229,10 @@ function FeatureIcon({ name }: { name: FeatureName }) {
   switch (name) {
     case 'Slide':
       return <path d="M -8 8 C -8 -2, 2 -6, 8 -8 M 8 -8 L 8 -3 M 8 -8 L 3 -8" />
+    case 'Natural Slide':
+      return (
+        <path d="M -8 8 C -8 -2, 2 -6, 8 -8 M 8 -8 L 8 -3 M 8 -8 L 3 -8 M -8 8 L -8 3 M -8 5.5 L -5 5.5 M -8 1 L -4.5 1" />
+      )
     case 'Water Feature':
       return <path d="M 0 -8 C 5 -2, 6 3, 0 8 C -6 3, -5 -2, 0 -8 Z" />
     case 'Swim-Up Bar':
@@ -250,7 +265,13 @@ function FeatureIcon({ name }: { name: FeatureName }) {
 // Renders one selected extra at its standard anchor position: the real
 // pre-generated sticker if it exists, falling back to the hand-drawn badge
 // icon (via onError) if that extra hasn't been generated yet.
-function ExtraOverlay({ name, anchor }: { name: FeatureName; anchor: { x: number; y: number } }) {
+function ExtraOverlay({
+  name,
+  anchor,
+}: {
+  name: Exclude<FeatureName, 'LED Lighting'>
+  anchor: { x: number; y: number }
+}) {
   const [failed, setFailed] = useState(false)
   const size = 68
 
@@ -298,6 +319,37 @@ function CoverOverlay({ cover, poolType }: { cover: string; poolType: 'inground'
         height={region.height}
         preserveAspectRatio="xMidYMid slice"
         onError={() => setFailed(true)}
+      />
+    </g>
+  )
+}
+
+// "LED Lighting" isn't a sticker -- it's rendered as a soft colored glow
+// concentrated near the edges of the water, using the same approximate
+// water region as the cover overlay. `mix-blend-mode: screen` lets the
+// glow color combine with the photo underneath instead of just sitting on
+// top of it like a flat shape, which reads much more like an actual
+// lighting effect than a sticker ever could.
+function LedLightingGlow({ poolType }: { poolType: 'inground' | 'above_ground' }) {
+  const region = COVER_REGION_BY_TYPE[poolType]
+  const gradientId = `led-glow-${poolType}`
+  return (
+    <g className="pool-pop-in" style={{ mixBlendMode: 'screen' }}>
+      <title>LED Lighting</title>
+      <defs>
+        <radialGradient id={gradientId} cx="50%" cy="50%" r="65%">
+          <stop offset="50%" stopColor="#38bdf8" stopOpacity={0} />
+          <stop offset="85%" stopColor="#38bdf8" stopOpacity={0.5} />
+          <stop offset="100%" stopColor="#7dd3fc" stopOpacity={0.75} />
+        </radialGradient>
+      </defs>
+      <rect
+        x={region.x}
+        y={region.y}
+        width={region.width}
+        height={region.height}
+        rx={Math.min(region.width, region.height) * 0.08}
+        fill={`url(#${gradientId})`}
       />
     </g>
   )
@@ -374,10 +426,20 @@ export default function PoolVisual({
           {hasCover && cover !== 'undecided' && (
             <CoverOverlay key={cover} cover={cover} poolType={effectivePoolType} />
           )}
+          {/* LED lighting can't show through a cover, so it only renders when the water is visible. */}
+          {!hasCover && selectedFeatures.includes('LED Lighting') && (
+            <LedLightingGlow poolType={effectivePoolType} />
+          )}
           {selectedFeatures.map((name) => {
-            const index = FEATURE_ORDER.indexOf(name as FeatureName)
+            const index = ANCHORED_FEATURE_ORDER.indexOf(name as Exclude<FeatureName, 'LED Lighting'>)
             if (index === -1) return null
-            return <ExtraOverlay key={name} name={name as FeatureName} anchor={FEATURE_ANCHORS[index]} />
+            return (
+              <ExtraOverlay
+                key={name}
+                name={name as Exclude<FeatureName, 'LED Lighting'>}
+                anchor={FEATURE_ANCHORS[index]}
+              />
+            )
           })}
         </svg>
       </div>

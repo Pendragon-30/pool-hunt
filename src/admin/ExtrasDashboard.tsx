@@ -7,13 +7,18 @@ import AssetGenerationGrid, { type AssetItem } from './AssetGenerationGrid'
 // and layered on top of whichever pool photo is showing, at a fixed anchor
 // position. See src/components/PoolVisual.tsx for the anchor layout and
 // fallback-icon behavior.
+//
+// "LED Lighting" is NOT listed here -- it renders as a color glow on the
+// water directly in code rather than a generated sticker (a translucent
+// lighting effect can't survive the chroma-key background removal every
+// other sticker goes through), so there's nothing to generate for it.
 const ITEMS: AssetItem[] = [
   { key: 'slide', label: 'Slide', requestBody: { category: 'extra', slug: 'slide' } },
+  { key: 'natural_slide', label: 'Natural Slide', requestBody: { category: 'extra', slug: 'natural_slide' } },
   { key: 'water_feature', label: 'Water Feature', requestBody: { category: 'extra', slug: 'water_feature' } },
   { key: 'swim_up_bar', label: 'Swim-Up Bar', requestBody: { category: 'extra', slug: 'swim_up_bar' } },
   { key: 'tanning_ledge', label: 'Tanning Ledge', requestBody: { category: 'extra', slug: 'tanning_ledge' } },
   { key: 'diving_board', label: 'Diving Board', requestBody: { category: 'extra', slug: 'diving_board' } },
-  { key: 'led_lighting', label: 'LED Lighting', requestBody: { category: 'extra', slug: 'led_lighting' } },
   {
     key: 'hot_tub_spa_combo',
     label: 'Hot Tub / Spa Combo',
