@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { getWaterMaterial } from './materials'
+import type { PoolSize } from './poolGeometry'
 
 // Every accessory below is a small assembly of plain THREE.js primitives
 // (boxes, cylinders, cones, torii, and perturbed icosahedra for "rock"
@@ -114,6 +115,43 @@ export function getSlotPlacement(slug: ExtraSlug, footprintWidth: number, footpr
   const z = Math.sin(angle) * rz
   const rotationY = Math.atan2(-x, z)
   return { x, z, rotationY }
+}
+
+// Which extras visually scale with the pool's own size tier, and by how
+// much. Only extras picked here are ones that realistically ARE sized in
+// proportion to the pool itself -- a built-in hot tub/spa bump-out, a
+// tanning ledge (a shelf cut into the pool's own structure), a natural
+// rock slide, and a rock waterfall feature. A standard slide, a diving
+// board, a swim-up bar, and a laminar water-feature jet are all closer to
+// a fixed human/equipment scale in real installations regardless of how
+// big the pool is (a diving board isn't longer because the pool is
+// bigger), so those stay a constant size across every size tier.
+//
+// The scale factors here are deliberately much more conservative than
+// SIZE_MULTIPLIERS (which spans 0.8 to 3 for the pool itself) -- growing
+// a hot tub or tanning ledge by the same multiplier as the pool would
+// look absurd (a "large" hot tub with several times the volume of a
+// "small" one). These are tuned to read as "noticeably bigger/smaller,"
+// not "a completely different-sized object."
+const SIZE_SCALABLE_EXTRAS: ReadonlySet<ExtraSlug> = new Set([
+  'hot_tub_spa_combo',
+  'tanning_ledge',
+  'natural_slide',
+  'waterfall',
+])
+
+const EXTRA_SCALE_BY_SIZE: Record<PoolSize, number> = {
+  small: 0.85,
+  medium: 1,
+  large: 1.2,
+  extra_large: 1.35,
+}
+
+// Returns the uniform scale factor the caller should apply to a built
+// accessory group before positioning it -- 1 (no change) for any extra
+// not in SIZE_SCALABLE_EXTRAS above.
+export function getExtraScale(slug: ExtraSlug, size: PoolSize): number {
+  return SIZE_SCALABLE_EXTRAS.has(slug) ? EXTRA_SCALE_BY_SIZE[size] : 1
 }
 
 // --- shared small helpers -------------------------------------------------

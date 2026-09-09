@@ -44,8 +44,8 @@ const ABOVE_GROUND_SHAPES = [
   { value: 'undecided', label: "I'm not sure yet" },
 ]
 
-// Kept in the same S/M/L order the admin dashboard uses (see SIZE_MULTIPLIERS
-// in src/three/poolGeometry.ts) -- these are the only real sizes; there's no
+// Kept in the same order the admin dashboard uses (see SIZE_MULTIPLIERS in
+// src/three/poolGeometry.ts) -- these are the only real sizes; there's no
 // "I'm not sure yet" here because the 3D preview and the final photoreal
 // render both need a concrete size to scale against, and "medium" is already
 // the sensible default when someone hasn't thought about it yet.
@@ -53,6 +53,7 @@ const SIZES = [
   { value: 'small', label: 'Small' },
   { value: 'medium', label: 'Medium' },
   { value: 'large', label: 'Large' },
+  { value: 'extra_large', label: 'Extra Large' },
 ]
 
 const CONSTRUCTIONS = [

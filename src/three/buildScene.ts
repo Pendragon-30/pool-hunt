@@ -28,7 +28,7 @@ import {
   getDeckMaterial,
   getWaterMaterial,
 } from './materials'
-import { buildExtraGroup, buildLedLightingGlow, getSlotPlacement, type ExtraSlug } from './extras'
+import { buildExtraGroup, buildLedLightingGlow, getExtraScale, getSlotPlacement, type ExtraSlug } from './extras'
 
 // The water sits a few inches below the coping -- completely normal for a
 // real pool and NOT the same thing as the "curb/raised lip" problem the old
@@ -176,6 +176,9 @@ function buildInGroundScene(
   for (const slug of extras) {
     const placement = getSlotPlacement(slug, bounds.width, bounds.length, ringOffset)
     const accessory = buildExtraGroup(slug)
+    // Some extras (hot tub/spa, tanning ledge, natural slide, waterfall)
+    // scale with the pool's own size tier -- see getExtraScale.
+    accessory.scale.setScalar(getExtraScale(slug, size))
     accessory.position.set(placement.x, 0, placement.z)
     accessory.rotation.y = placement.rotationY
     enableShadows(accessory)
@@ -275,6 +278,7 @@ function buildAboveGroundScene(
   for (const slug of extras) {
     const placement = getSlotPlacement(slug, dims.width, dims.length, ringOffset)
     const accessory = buildExtraGroup(slug)
+    accessory.scale.setScalar(getExtraScale(slug, size))
     accessory.position.set(placement.x, 0, placement.z)
     accessory.rotation.y = placement.rotationY
     enableShadows(accessory)

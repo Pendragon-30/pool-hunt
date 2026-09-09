@@ -40,6 +40,7 @@ const SIZES: { value: PoolSize; label: string }[] = [
   { value: 'small', label: 'Small' },
   { value: 'medium', label: 'Medium' },
   { value: 'large', label: 'Large' },
+  { value: 'extra_large', label: 'Extra Large' },
 ]
 
 const COVERS = [
@@ -94,6 +95,7 @@ const SIZE_DESCRIPTIONS: Record<PoolSize, string> = {
   small: 'small',
   medium: 'mid-size',
   large: 'large',
+  extra_large: 'extra-large, expansive',
 }
 
 function buildSceneDescription(config: Config): string {

@@ -58,7 +58,7 @@ function getEffectiveConstruction(poolType: 'inground' | 'above_ground', constru
     : DEFAULT_CONSTRUCTION_BY_TYPE[poolType]
 }
 
-const REAL_SIZES: PoolSize[] = ['small', 'medium', 'large']
+const REAL_SIZES: PoolSize[] = ['small', 'medium', 'large', 'extra_large']
 
 function getEffectiveSize(size: string): PoolSize {
   return REAL_SIZES.includes(size as PoolSize) ? (size as PoolSize) : 'medium'
@@ -250,7 +250,7 @@ export default function PoolVisual({
 
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t bg-white/70 px-4 py-2 text-xs text-slate-500">
         <span>{effectivePoolType === 'above_ground' ? 'Above-ground' : 'Inground'}</span>
-        <span className="capitalize">{effectiveSize}</span>
+        <span className="capitalize">{effectiveSize.replace(/_/g, ' ')}</span>
         <span>{CONSTRUCTION_LABELS[effectiveConstruction]}</span>
       </div>
 

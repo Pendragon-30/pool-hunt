@@ -14,7 +14,7 @@ export type PoolType = 'inground' | 'above_ground'
 export type InGroundShapeId = 'rectangle' | 'freeform' | 'kidney' | 'oval' | 'round' | 'lap'
 export type AboveGroundShapeId = 'round' | 'oval'
 export type ConstructionId = 'fiberglass' | 'vinyl_liner' | 'concrete_gunite'
-export type PoolSize = 'small' | 'medium' | 'large'
+export type PoolSize = 'small' | 'medium' | 'large' | 'extra_large'
 
 export const INGROUND_SHAPES: InGroundShapeId[] = ['rectangle', 'freeform', 'kidney', 'oval', 'round', 'lap']
 export const ABOVE_GROUND_SHAPES: AboveGroundShapeId[] = ['round', 'oval']
@@ -73,10 +73,15 @@ export const ABOVE_GROUND_DIMENSIONS: Record<AboveGroundShapeId, { width: number
 // same lever already used for small -- together these push a large pool
 // to roughly two-thirds of the framed footprint, a much more decisive
 // jump from medium than scaling the multiplier alone could achieve.
+// 'extra_large' is defined relative to 'large' rather than as its own
+// tuned number -- "1.5x the size of large" was the actual ask, so it's
+// written that way directly instead of as a separate opaque constant that
+// would need to be kept in sync by hand if 'large' ever changes again.
 export const SIZE_MULTIPLIERS: Record<PoolSize, number> = {
   small: 0.8,
   medium: 1,
   large: 2,
+  extra_large: 2 * 1.5,
 }
 
 function scaleDims<T extends { width: number; length: number }>(dims: T, size: PoolSize): T {
@@ -101,10 +106,17 @@ function scaleDims<T extends { width: number; length: number }>(dims: T, size: P
 // (same lever as 'small') is what actually pushes it to look decisively
 // bigger rather than just somewhat bigger than medium -- paired with the
 // larger SIZE_MULTIPLIERS.large above.
+// 'extra_large' continues the same tightening trend one step further --
+// note the margin doesn't scale with SIZE_MULTIPLIERS at all (see
+// getInGroundDeckMarginFt below), so 'extra_large' already reads as
+// meaningfully bigger than 'large' from the multiplier jump (2 -> 3)
+// alone; the small additional margin-scale reduction here (0.65 -> 0.6)
+// is a modest extra push, not the primary lever.
 export const DECK_MARGIN_SCALE_BY_SIZE: Record<PoolSize, number> = {
   small: 0.7,
   medium: 1,
   large: 0.65,
+  extra_large: 0.6,
 }
 
 // Third pass: the fixes above make "small vs. medium vs. large" read
