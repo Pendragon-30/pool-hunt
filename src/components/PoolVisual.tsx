@@ -262,9 +262,48 @@ function FeatureIcon({ name }: { name: FeatureName }) {
   }
 }
 
+// Rough calibration for turning a real-world footprint (in feet) into a
+// pixel size in the 400x300 photo-frame viewBox. The pool-photo generation
+// prompts (see generate-pool-image) frame a ~16x32 foot inground pool with
+// roughly an 8-foot concrete deck around it, so the ~400px-wide frame reads
+// as showing a scene about 32 + 8 + 8 = ~48 feet across. This is only an
+// approximation -- the goal isn't architectural precision, it's making
+// different extras render at visibly distinct, proportionate sizes instead
+// of one identical square for everything.
+const PX_PER_FOOT = 8.3
+const MIN_EXTRA_PX = 40
+const MAX_EXTRA_PX = 170
+
+// Approximate real-world bounding footprint (width x height, in feet) for
+// each extra, used to size its sticker overlay so a small feature (a water
+// jet) doesn't render at the same size as a large one (a tanning ledge).
+// These are deliberately rough -- just enough to keep relative scale
+// sensible across the lineup.
+const EXTRA_FOOTPRINT_FT: Record<Exclude<FeatureName, 'LED Lighting'>, { width: number; height: number }> = {
+  Slide: { width: 6, height: 9 },
+  'Natural Slide': { width: 7, height: 9 },
+  'Water Feature': { width: 8, height: 5 },
+  'Swim-Up Bar': { width: 9, height: 6 },
+  'Tanning Ledge': { width: 10, height: 7 },
+  'Diving Board': { width: 9, height: 3.5 },
+  'Hot Tub / Spa Combo': { width: 7, height: 7 },
+  Waterfall: { width: 7, height: 8 },
+}
+
+function getExtraOverlaySize(name: Exclude<FeatureName, 'LED Lighting'>): { width: number; height: number } {
+  const footprint = EXTRA_FOOTPRINT_FT[name]
+  const clamp = (px: number) => Math.min(MAX_EXTRA_PX, Math.max(MIN_EXTRA_PX, px))
+  return {
+    width: clamp(footprint.width * PX_PER_FOOT),
+    height: clamp(footprint.height * PX_PER_FOOT),
+  }
+}
+
 // Renders one selected extra at its standard anchor position: the real
 // pre-generated sticker if it exists, falling back to the hand-drawn badge
-// icon (via onError) if that extra hasn't been generated yet.
+// icon (via onError) if that extra hasn't been generated yet. Sized per-item
+// (see EXTRA_FOOTPRINT_FT above) rather than a single uniform square, so the
+// overlay looks roughly to-scale next to the pool photo underneath it.
 function ExtraOverlay({
   name,
   anchor,
@@ -273,7 +312,6 @@ function ExtraOverlay({
   anchor: { x: number; y: number }
 }) {
   const [failed, setFailed] = useState(false)
-  const size = 68
 
   if (failed) {
     return (
@@ -283,15 +321,17 @@ function ExtraOverlay({
     )
   }
 
+  const { width, height } = getExtraOverlaySize(name)
+
   return (
     <g className="pool-pop-in" style={{ transformBox: 'fill-box', transformOrigin: 'center' }}>
       <title>{name}</title>
       <image
         href={getExtraStickerUrl(name)}
-        x={anchor.x - size / 2}
-        y={anchor.y - size / 2}
-        width={size}
-        height={size}
+        x={anchor.x - width / 2}
+        y={anchor.y - height / 2}
+        width={width}
+        height={height}
         preserveAspectRatio="xMidYMid meet"
         onError={() => setFailed(true)}
       />
