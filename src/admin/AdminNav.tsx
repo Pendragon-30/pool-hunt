@@ -1,12 +1,14 @@
 import { Link, useLocation } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 
+// Photos links to its default sub-tab (Inground Pools); PhotosSubNav
+// handles the rest of the Inground/Above Ground/Extras/Covers/Components
+// split underneath it.
 const TABS = [
   { label: 'Leads', path: '/admin' },
   { label: 'Dealers', path: '/admin/dealers' },
   { label: 'Blog', path: '/admin/blog' },
-  { label: 'Pool Photos', path: '/admin/photos' },
-  { label: 'Fun Extras', path: '/admin/extras' },
+  { label: 'Photos', path: '/admin/photos/inground' },
 ]
 
 export default function AdminNav({ onRefresh }: { onRefresh: () => void }) {
@@ -24,19 +26,25 @@ export default function AdminNav({ onRefresh }: { onRefresh: () => void }) {
             Design My Swimming Pool
           </Link>
           <nav className="flex items-center gap-4">
-            {TABS.map((tab) => (
-              <Link
-                key={tab.path}
-                to={tab.path}
-                className={`text-sm font-semibold ${
-                  location.pathname === tab.path
-                    ? 'text-sky-700'
-                    : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                {tab.label}
-              </Link>
-            ))}
+            {TABS.map((tab) => {
+              // "Photos" should stay highlighted across all five of its
+              // sub-tabs, not just its own default link.
+              const isActive =
+                tab.label === 'Photos'
+                  ? location.pathname.startsWith('/admin/photos')
+                  : location.pathname === tab.path
+              return (
+                <Link
+                  key={tab.path}
+                  to={tab.path}
+                  className={`text-sm font-semibold ${
+                    isActive ? 'text-sky-700' : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  {tab.label}
+                </Link>
+              )
+            })}
           </nav>
         </div>
         <div className="flex items-center gap-3">

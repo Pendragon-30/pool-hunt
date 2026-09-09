@@ -18,6 +18,8 @@ import { useState } from 'react'
 
 const SUPABASE_STORAGE_BASE = 'https://bpgirvmsgfqowgfwlhow.supabase.co/storage/v1/object/public/pool-photos'
 const FUN_EXTRAS_STORAGE_BASE = 'https://bpgirvmsgfqowgfwlhow.supabase.co/storage/v1/object/public/fun-extras'
+const POOL_COVERS_STORAGE_BASE = 'https://bpgirvmsgfqowgfwlhow.supabase.co/storage/v1/object/public/pool-covers'
+const POOL_COMPONENTS_STORAGE_BASE = 'https://bpgirvmsgfqowgfwlhow.supabase.co/storage/v1/object/public/pool-components'
 
 const REAL_INGROUND_SHAPES = ['rectangle', 'freeform', 'kidney', 'oval', 'round', 'lap']
 const REAL_ABOVE_GROUND_SHAPES = ['round', 'oval']
@@ -84,6 +86,27 @@ const FEATURE_SLUGS: Record<FeatureName, string> = {
 
 function getExtraStickerUrl(name: FeatureName): string {
   return `${FUN_EXTRAS_STORAGE_BASE}/${FEATURE_SLUGS[name]}.png`
+}
+
+function getCoverStickerUrl(cover: string): string {
+  return `${POOL_COVERS_STORAGE_BASE}/${cover}.png`
+}
+
+function getComponentIconUrl(kind: 'heater' | 'filtration', value: string): string {
+  return `${POOL_COMPONENTS_STORAGE_BASE}/${kind}_${value}.png`
+}
+
+// Rough region the water occupies in each pool-photo framing, used to place
+// the (optional) generated cover sticker over the water. These are
+// deliberately generic rather than shape-exact -- this is a marketing
+// preview image, not a to-scale rendering, the same way fun-extra stickers
+// land in fixed slots regardless of the pool's actual outline.
+const COVER_REGION_BY_TYPE: Record<
+  'inground' | 'above_ground',
+  { x: number; y: number; width: number; height: number }
+> = {
+  inground: { x: 100, y: 95, width: 200, height: 140 },
+  above_ground: { x: 80, y: 60, width: 240, height: 200 },
 }
 
 type PoolVisualProps = {
@@ -255,6 +278,49 @@ function ExtraOverlay({ name, anchor }: { name: FeatureName; anchor: { x: number
   )
 }
 
+// Renders the generated cover sticker over the approximate water region for
+// the given pool type. If that cover hasn't been generated yet, renders
+// nothing extra -- the footer chip below the image already says which
+// cover is selected, so there's no broken-looking gap.
+function CoverOverlay({ cover, poolType }: { cover: string; poolType: 'inground' | 'above_ground' }) {
+  const [failed, setFailed] = useState(false)
+  if (failed) return null
+
+  const region = COVER_REGION_BY_TYPE[poolType]
+  return (
+    <g className="pool-pop-in" style={{ transformBox: 'fill-box', transformOrigin: 'center' }}>
+      <title>Pool cover</title>
+      <image
+        href={getCoverStickerUrl(cover)}
+        x={region.x}
+        y={region.y}
+        width={region.width}
+        height={region.height}
+        preserveAspectRatio="xMidYMid slice"
+        onError={() => setFailed(true)}
+      />
+    </g>
+  )
+}
+
+// Small footer-chip icon for a heater or filtration type: the real
+// generated component icon once it exists, falling back to the original
+// hand-drawn glyph until then.
+function ComponentIcon({ src, fallback }: { src: string; fallback: React.ReactNode }) {
+  const [failed, setFailed] = useState(false)
+  if (failed) return <>{fallback}</>
+  return (
+    <img
+      src={src}
+      alt=""
+      width={16}
+      height={16}
+      className="h-4 w-4 shrink-0 object-contain"
+      onError={() => setFailed(true)}
+    />
+  )
+}
+
 export default function PoolVisual({
   poolType,
   shape,
@@ -305,6 +371,9 @@ export default function PoolVisual({
           className="block aspect-[4/3] w-full object-cover pool-pop-in"
         />
         <svg viewBox="0 0 400 300" className="absolute inset-0 h-full w-full" role="presentation">
+          {hasCover && cover !== 'undecided' && (
+            <CoverOverlay key={cover} cover={cover} poolType={effectivePoolType} />
+          )}
           {selectedFeatures.map((name) => {
             const index = FEATURE_ORDER.indexOf(name as FeatureName)
             if (index === -1) return null
@@ -322,13 +391,21 @@ export default function PoolVisual({
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t bg-white/70 px-4 py-2 text-xs text-slate-600">
           {filtration && (
             <span className="flex items-center gap-1.5">
-              <PumpGlyph color={filtrationColor} />
+              <ComponentIcon
+                key={filtration}
+                src={getComponentIconUrl('filtration', filtration)}
+                fallback={<PumpGlyph color={filtrationColor} />}
+              />
               {filtrationLabel}
             </span>
           )}
           {heater && heater !== 'none' && (
             <span className="flex items-center gap-1.5">
-              <HeaterGlyph kind={heater} color="#e0742a" />
+              <ComponentIcon
+                key={heater}
+                src={getComponentIconUrl('heater', heater)}
+                fallback={<HeaterGlyph kind={heater} color="#e0742a" />}
+              />
               {heaterLabel}
             </span>
           )}
