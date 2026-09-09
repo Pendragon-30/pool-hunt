@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
+import SiteHeader from '../components/SiteHeader'
+import SiteFooter from '../components/SiteFooter'
 
 type Post = {
   id: string
@@ -45,41 +47,27 @@ export default function BlogPost() {
     .filter(Boolean)
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <header className="border-b bg-white">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-          <Link to="/" className="text-lg font-bold text-sky-700 sm:text-xl">
-            Design My Swimming Pool
-          </Link>
-          <nav className="flex items-center gap-4 text-sm text-slate-600">
-            <Link to="/blog" className="hover:text-sky-700">
-              Blog
-            </Link>
-            <Link to="/for-dealers" className="hover:text-sky-700">
-              For Dealers
-            </Link>
-          </nav>
-        </div>
-      </header>
+    <div className="min-h-screen bg-white text-slate-900">
+      <SiteHeader />
 
       <main className="mx-auto max-w-3xl px-6 py-16">
         {loading && <p className="text-sm text-slate-500">Loading…</p>}
 
         {!loading && notFound && (
           <div>
-            <h1 className="text-2xl font-bold">Post not found</h1>
+            <h1 className="text-2xl font-bold text-navy-900">Post not found</h1>
             <p className="mt-2 text-slate-600">
               This post may have been unpublished or the link is out of date.
             </p>
-            <Link to="/blog" className="mt-4 inline-block text-sky-700 hover:text-sky-800">
+            <Link to="/blog" className="mt-4 inline-block font-medium text-sky-600 hover:text-navy-800">
               ← Back to the blog
             </Link>
           </div>
         )}
 
         {!loading && post && (
-          <article>
-            <Link to="/blog" className="text-sm text-sky-700 hover:text-sky-800">
+          <article className="animate-fade-in-up">
+            <Link to="/blog" className="text-sm font-medium text-sky-600 hover:text-navy-800">
               ← Back to the blog
             </Link>
 
@@ -87,12 +75,14 @@ export default function BlogPost() {
               <img
                 src={post.cover_image_url}
                 alt=""
-                className="my-6 aspect-video w-full rounded-xl object-cover"
+                className="my-6 aspect-video w-full rounded-2xl object-cover shadow-sm"
               />
             )}
 
-            <h1 className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl">{post.title}</h1>
-            <p className="mt-2 text-sm text-slate-400">
+            <h1 className="mt-4 text-3xl font-extrabold tracking-tight text-navy-900 sm:text-4xl">
+              {post.title}
+            </h1>
+            <p className="mt-2 text-sm text-navy-500">
               {new Date(post.published_at).toLocaleDateString(undefined, {
                 year: 'numeric',
                 month: 'long',
@@ -114,6 +104,8 @@ export default function BlogPost() {
           </article>
         )}
       </main>
+
+      <SiteFooter />
     </div>
   )
 }

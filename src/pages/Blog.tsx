@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
+import SiteHeader from '../components/SiteHeader'
+import SiteFooter from '../components/SiteFooter'
+import Reveal from '../components/Reveal'
 
 type Post = {
   id: string
@@ -29,71 +32,68 @@ export default function Blog() {
   }, [])
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <header className="border-b bg-white">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-          <Link to="/" className="text-lg font-bold text-sky-700 sm:text-xl">
-            Design My Swimming Pool
-          </Link>
-          <nav className="flex items-center gap-4 text-sm text-slate-600">
-            <Link to="/blog" className="text-sky-700">
-              Blog
-            </Link>
-            <Link to="/for-dealers" className="hover:text-sky-700">
-              For Dealers
-            </Link>
-          </nav>
-        </div>
-      </header>
+    <div className="min-h-screen bg-white text-slate-900">
+      <SiteHeader />
+
+      <section className="bg-gradient-to-b from-navy-950 to-navy-900 px-6 py-16 text-center text-white">
+        <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">Pool buying guides</h1>
+        <p className="mx-auto mt-3 max-w-xl text-navy-200">
+          Straightforward advice on shapes, materials, features, and budgeting — so you know what to
+          ask for before you talk to a builder.
+        </p>
+      </section>
 
       <main className="mx-auto max-w-3xl px-6 py-16">
-        <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Pool buying guides</h1>
-        <p className="mt-3 text-slate-600">
-          Straightforward advice on shapes, materials, features, and budgeting —
-          so you know what to ask for before you talk to a builder.
-        </p>
-
-        {loading && <p className="mt-8 text-sm text-slate-500">Loading…</p>}
+        {loading && <p className="text-sm text-slate-500">Loading…</p>}
 
         {!loading && posts.length === 0 && (
-          <p className="mt-8 text-sm text-slate-500">
-            No posts published yet — check back soon.
-          </p>
+          <p className="text-sm text-slate-500">No posts published yet — check back soon.</p>
         )}
 
-        <div className="mt-10 space-y-8">
-          {posts.map((post) => (
-            <article key={post.id} className="border-b pb-8">
-              {post.cover_image_url && (
-                <img
-                  src={post.cover_image_url}
-                  alt=""
-                  className="mb-4 aspect-video w-full rounded-xl object-cover"
-                />
-              )}
-              <h2 className="text-xl font-semibold">
-                <Link to={`/blog/${post.slug}`} className="hover:text-sky-700">
-                  {post.title}
-                </Link>
-              </h2>
-              <p className="mt-1 text-sm text-slate-400">
-                {new Date(post.published_at).toLocaleDateString(undefined, {
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric',
-                })}
-              </p>
-              {post.excerpt && <p className="mt-2 text-slate-600">{post.excerpt}</p>}
-              <Link
-                to={`/blog/${post.slug}`}
-                className="mt-3 inline-block text-sm font-medium text-sky-700 hover:text-sky-800"
-              >
-                Read more →
-              </Link>
-            </article>
+        <div className="space-y-6">
+          {posts.map((post, i) => (
+            <Reveal key={post.id} delay={Math.min(i, 4) * 80}>
+              <article className="group overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg sm:flex">
+                {post.cover_image_url && (
+                  <Link to={`/blog/${post.slug}`} className="block sm:w-56 sm:shrink-0">
+                    <img
+                      src={post.cover_image_url}
+                      alt=""
+                      className="aspect-video w-full object-cover transition-transform duration-500 group-hover:scale-105 sm:aspect-square sm:h-full"
+                    />
+                  </Link>
+                )}
+                <div className="p-6">
+                  <p className="text-xs font-medium text-navy-500">
+                    {new Date(post.published_at).toLocaleDateString(undefined, {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                    })}
+                  </p>
+                  <h2 className="mt-1.5 text-xl font-bold text-navy-900">
+                    <Link to={`/blog/${post.slug}`} className="transition-colors hover:text-sky-600">
+                      {post.title}
+                    </Link>
+                  </h2>
+                  {post.excerpt && <p className="mt-2 text-slate-600">{post.excerpt}</p>}
+                  <Link
+                    to={`/blog/${post.slug}`}
+                    className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-sky-600 transition-colors hover:text-navy-800"
+                  >
+                    Read more
+                    <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="transition-transform group-hover:translate-x-0.5">
+                      <path d="M5 12h14M13 6l6 6-6 6" />
+                    </svg>
+                  </Link>
+                </div>
+              </article>
+            </Reveal>
           ))}
         </div>
       </main>
+
+      <SiteFooter />
     </div>
   )
 }
