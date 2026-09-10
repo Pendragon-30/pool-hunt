@@ -2,6 +2,7 @@ import { Suspense, lazy, useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import type { Tables } from '../lib/database.types'
 import { resolvePoolVisualConfig, type ResolvedPoolVisualConfig } from './PoolVisual'
+import { useMediaQuery } from '../hooks/useMediaQuery'
 
 // There is deliberately no live PoolVisual/3D preview anywhere in this
 // form anymore -- the only image a visitor ever sees is the one
@@ -13,7 +14,7 @@ import { resolvePoolVisualConfig, type ResolvedPoolVisualConfig } from './PoolVi
 // but comparatively plain) 3D preview along the way. PoolScene is still
 // loaded here, lazily, purely to render one invisible guide-image capture
 // after submission -- see GuideCapture below -- it is never mounted
-// visibly during steps 0-3.
+// visibly during any of the form's steps.
 const PoolScene = lazy(() => import('../three/PoolScene'))
 
 type FunFeature = Tables<'fun_features'>
@@ -121,12 +122,27 @@ const TIMELINES = [
   { value: 'just_researching', label: 'Just researching' },
 ]
 
-const STEPS = [
-  { title: 'Tell us about your pool' },
-  { title: 'Any fun extras?' },
-  { title: 'Budget & timeline' },
-  { title: 'How should builders reach you?' },
-]
+// The pool-details step normally holds all 7 fields (type/shape/
+// construction/size/filtration/heater/cover) at once, laid out two-per-row
+// once the viewport is wide enough for that (see the `sm:grid-cols-2` grids
+// below). Below that width everything stacks into one long column, which
+// makes step one noticeably longer to scroll through than the rest of the
+// form -- so on narrow viewports only, filtration/heater/cover split off
+// into their own step instead of bulking up step one. `isWide` mirrors
+// Tailwind's `sm` breakpoint (640px) exactly so the step count always
+// matches what's actually laid out in one column vs two.
+const STEP_TITLES: Record<string, string> = {
+  details: 'Tell us about your pool',
+  'more-details': 'A few more details',
+  extras: 'Any fun extras?',
+  budget: 'Budget & timeline',
+  contact: 'How should builders reach you?',
+}
+const WIDE_STEP_KINDS = ['details', 'extras', 'budget', 'contact'] as const
+const NARROW_STEP_KINDS = ['details', 'more-details', 'extras', 'budget', 'contact'] as const
+const WIDE_STEPS = WIDE_STEP_KINDS.map((kind) => ({ kind, title: STEP_TITLES[kind] }))
+const NARROW_STEPS = NARROW_STEP_KINDS.map((kind) => ({ kind, title: STEP_TITLES[kind] }))
+type FormStep = { kind: string; title: string }
 
 const fieldClasses =
   'mt-1.5 block w-full rounded-md border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 hover:border-slate-400 focus:border-navy-600 focus:ring-2 focus:ring-navy-100'
@@ -176,10 +192,10 @@ function SelectField({
   )
 }
 
-function StepProgress({ step }: { step: number }) {
+function StepProgress({ step, steps }: { step: number; steps: FormStep[] }) {
   return (
     <ol className="mb-8 flex items-start justify-between">
-      {STEPS.map((s, i) => (
+      {steps.map((s, i) => (
         <li key={s.title} className="relative flex flex-1 flex-col items-center text-center">
           {i > 0 && (
             <div
@@ -250,6 +266,31 @@ export default function LeadForm() {
   const [renderConfig, setRenderConfig] = useState<ResolvedPoolVisualConfig | null>(null)
 
   const [step, setStep] = useState(0)
+
+  // Matches Tailwind's `sm` breakpoint -- the same width where the field
+  // grids below switch from one column to two -- so STEPS always reflects
+  // what's actually on screen.
+  const isWide = useMediaQuery('(min-width: 640px)')
+  const STEPS = isWide ? WIDE_STEPS : NARROW_STEPS
+
+  // If the viewport crosses the breakpoint mid-fill (rotating a tablet or
+  // resizing a browser window), keep the visitor on the same logical
+  // section rather than landing on a mismatched or out-of-range index.
+  // 'more-details' only exists in the narrow step list -- switching to wide
+  // collapses it back into the merged 'details' step it's now part of.
+  const prevIsWideRef = useRef(isWide)
+  useEffect(() => {
+    if (prevIsWideRef.current === isWide) return
+    const prevKinds = prevIsWideRef.current ? WIDE_STEP_KINDS : NARROW_STEP_KINDS
+    const nextKinds = isWide ? WIDE_STEP_KINDS : NARROW_STEP_KINDS
+    prevIsWideRef.current = isWide
+    setStep((s) => {
+      const kind = prevKinds[s]
+      const nextIndex = (nextKinds as readonly string[]).indexOf(kind)
+      if (nextIndex !== -1) return nextIndex
+      return Math.max(0, (nextKinds as readonly string[]).indexOf('details'))
+    })
+  }, [isWide])
 
   const shapeOptions = poolType === 'above_ground' ? ABOVE_GROUND_SHAPES : ALL_SHAPES
   const constructionOptions = poolType === 'above_ground' ? ABOVE_GROUND_CONSTRUCTIONS : CONSTRUCTIONS
@@ -363,198 +404,213 @@ export default function LeadForm() {
     )
   }
 
+  const currentKind = STEPS[step]?.kind
+
+  const poolDetailsFields = (
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <SelectField label="Pool type" value={poolType} onChange={handlePoolTypeChange} options={POOL_TYPES} />
+      <SelectField label="Shape" value={shape} onChange={setShape} options={shapeOptions} />
+      <SelectField
+        label="Construction"
+        value={construction}
+        onChange={setConstruction}
+        options={constructionOptions}
+      />
+      <SelectField label="Pool size" value={poolSize} onChange={setPoolSize} options={SIZES} />
+    </div>
+  )
+
+  const moreDetailsFields = (
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <SelectField label="Filtration" value={filtration} onChange={setFiltration} options={FILTRATIONS} />
+      <SelectField label="Heater" value={heater} onChange={setHeater} options={HEATERS} />
+      <SelectField label="Cover" value={cover} onChange={setCover} options={COVERS} />
+    </div>
+  )
+
   return (
-    <div className="mx-auto grid max-w-3xl gap-6 lg:grid-cols-[minmax(0,1fr)_260px]">
-      <div className="order-2 lg:order-1">
-        <form
-          onSubmit={handleSubmit}
-          className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm sm:p-8"
-        >
-          <StepProgress step={step} />
+    <div className="mx-auto max-w-3xl">
+      <form
+        onSubmit={handleSubmit}
+        className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm sm:p-8"
+      >
+        <StepProgress step={step} steps={STEPS} />
 
-          <div key={step} className="animate-step-in">
-            {step === 0 && (
-              <div>
-                <h2 className="text-lg font-bold text-navy-900">{STEPS[0].title}</h2>
-                <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <SelectField
-                    label="Pool type"
-                    value={poolType}
-                    onChange={handlePoolTypeChange}
-                    options={POOL_TYPES}
-                  />
-                  <SelectField label="Shape" value={shape} onChange={setShape} options={shapeOptions} />
-                  <SelectField
-                    label="Construction"
-                    value={construction}
-                    onChange={setConstruction}
-                    options={constructionOptions}
-                  />
-                  <SelectField label="Pool size" value={poolSize} onChange={setPoolSize} options={SIZES} />
-                  <SelectField
-                    label="Filtration"
-                    value={filtration}
-                    onChange={setFiltration}
-                    options={FILTRATIONS}
-                  />
-                  <SelectField label="Heater" value={heater} onChange={setHeater} options={HEATERS} />
-                  <SelectField label="Cover" value={cover} onChange={setCover} options={COVERS} />
+        <div key={step} className="animate-step-in">
+          {currentKind === 'details' && (
+            <div>
+              <h2 className="text-lg font-bold text-navy-900">{STEPS[step].title}</h2>
+              <div className="mt-4">{poolDetailsFields}</div>
+              {/* On wide viewports there's no separate 'more-details' step --
+                  filtration/heater/cover stay folded into this one step. */}
+              {isWide && <div className="mt-4">{moreDetailsFields}</div>}
+            </div>
+          )}
+
+          {currentKind === 'more-details' && (
+            <div>
+              <h2 className="text-lg font-bold text-navy-900">{STEPS[step].title}</h2>
+              <div className="mt-4">{moreDetailsFields}</div>
+            </div>
+          )}
+
+          {currentKind === 'extras' && (
+            <div>
+              <h2 className="text-lg font-bold text-navy-900">{STEPS[step].title}</h2>
+              {features.length > 0 ? (
+                <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+                  {features.map((feature) => (
+                    <label
+                      key={feature.id}
+                      className="flex cursor-pointer items-center gap-2 rounded-md border border-slate-300 px-3 py-2.5 text-sm text-slate-700 transition-colors hover:border-slate-400 has-[:checked]:border-navy-700 has-[:checked]:bg-navy-50 has-[:checked]:text-navy-900"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedFeatureIds.includes(feature.id)}
+                        onChange={() => toggleFeature(feature.id)}
+                        className="accent-navy-800"
+                      />
+                      {feature.name}
+                    </label>
+                  ))}
                 </div>
-              </div>
-            )}
+              ) : (
+                <p className="mt-3 text-sm text-slate-500">No optional extras to show right now.</p>
+              )}
+            </div>
+          )}
 
-            {step === 1 && (
-              <div>
-                <h2 className="text-lg font-bold text-navy-900">{STEPS[1].title}</h2>
-                {features.length > 0 ? (
-                  <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-                    {features.map((feature) => (
-                      <label
-                        key={feature.id}
-                        className="flex cursor-pointer items-center gap-2 rounded-md border border-slate-300 px-3 py-2.5 text-sm text-slate-700 transition-colors hover:border-slate-400 has-[:checked]:border-navy-700 has-[:checked]:bg-navy-50 has-[:checked]:text-navy-900"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedFeatureIds.includes(feature.id)}
-                          onChange={() => toggleFeature(feature.id)}
-                          className="accent-navy-800"
-                        />
-                        {feature.name}
-                      </label>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="mt-3 text-sm text-slate-500">No optional extras to show right now.</p>
-                )}
+          {currentKind === 'budget' && (
+            <div>
+              <h2 className="text-lg font-bold text-navy-900">{STEPS[step].title}</h2>
+              <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <SelectField label="Budget range" value={budgetRange} onChange={setBudgetRange} options={BUDGETS} />
+                <SelectField label="Timeline" value={timeline} onChange={setTimeline} options={TIMELINES} />
               </div>
-            )}
+            </div>
+          )}
 
-            {step === 2 && (
-              <div>
-                <h2 className="text-lg font-bold text-navy-900">{STEPS[2].title}</h2>
-                <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <SelectField
-                    label="Budget range"
-                    value={budgetRange}
-                    onChange={setBudgetRange}
-                    options={BUDGETS}
+          {currentKind === 'contact' && (
+            <div>
+              <h2 className="text-lg font-bold text-navy-900">{STEPS[step].title}</h2>
+              <p className="mt-1.5 text-sm text-navy-700">
+                Submit your info and we'll generate a free photorealistic rendering of your exact pool —
+                yours to keep.
+              </p>
+              <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <label className="block text-sm font-semibold text-navy-900">
+                  Name
+                  <input
+                    required
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className={fieldClasses}
                   />
-                  <SelectField label="Timeline" value={timeline} onChange={setTimeline} options={TIMELINES} />
-                </div>
+                </label>
+                <label className="block text-sm font-semibold text-navy-900">
+                  Email
+                  <input
+                    required
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className={fieldClasses}
+                  />
+                </label>
+                <label className="block text-sm font-semibold text-navy-900">
+                  Phone
+                  <input
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    className={fieldClasses}
+                  />
+                </label>
+                <label className="block text-sm font-semibold text-navy-900">
+                  Zip code
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={zipCode}
+                    onChange={(e) => setZipCode(e.target.value)}
+                    className={fieldClasses}
+                  />
+                </label>
               </div>
-            )}
+            </div>
+          )}
+        </div>
 
-            {step === 3 && (
-              <div>
-                <h2 className="text-lg font-bold text-navy-900">{STEPS[3].title}</h2>
-                <p className="mt-1.5 text-sm text-navy-700">
-                  Submit your info and we'll generate a free photorealistic rendering of your exact pool —
-                  yours to keep.
-                </p>
-                <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <label className="block text-sm font-semibold text-navy-900">
-                    Name
-                    <input
-                      required
-                      type="text"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      className={fieldClasses}
-                    />
-                  </label>
-                  <label className="block text-sm font-semibold text-navy-900">
-                    Email
-                    <input
-                      required
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className={fieldClasses}
-                    />
-                  </label>
-                  <label className="block text-sm font-semibold text-navy-900">
-                    Phone
-                    <input
-                      type="tel"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      className={fieldClasses}
-                    />
-                  </label>
-                  <label className="block text-sm font-semibold text-navy-900">
-                    Zip code
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={zipCode}
-                      onChange={(e) => setZipCode(e.target.value)}
-                      className={fieldClasses}
-                    />
-                  </label>
-                </div>
-              </div>
-            )}
-          </div>
+        {error && <p className="mt-4 text-sm font-medium text-red-600">{error}</p>}
 
-          {error && <p className="mt-4 text-sm font-medium text-red-600">{error}</p>}
+        <div className="mt-7 flex items-center justify-between">
+          <button
+            type="button"
+            onClick={goBack}
+            disabled={step === 0}
+            className="rounded-md px-4 py-2.5 text-sm font-semibold text-slate-500 transition-colors hover:bg-slate-50 hover:text-navy-900 disabled:opacity-0"
+          >
+            Back
+          </button>
 
-          <div className="mt-7 flex items-center justify-between">
+          {step < STEPS.length - 1 ? (
             <button
               type="button"
-              onClick={goBack}
-              disabled={step === 0}
-              className="rounded-md px-4 py-2.5 text-sm font-semibold text-slate-500 transition-colors hover:bg-slate-50 hover:text-navy-900 disabled:opacity-0"
+              onClick={goNext}
+              className="rounded-md bg-navy-900 px-7 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-navy-800"
             >
-              Back
+              Next
             </button>
+          ) : (
+            <button
+              type="submit"
+              disabled={submitting}
+              className="rounded-md bg-navy-900 px-7 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-navy-800 disabled:opacity-50"
+            >
+              {submitting ? 'Submitting...' : 'Get matched with a dealer'}
+            </button>
+          )}
+        </div>
+      </form>
 
-            {step < STEPS.length - 1 ? (
-              <button
-                type="button"
-                onClick={goNext}
-                className="rounded-md bg-navy-900 px-7 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-navy-800"
-              >
-                Next
-              </button>
-            ) : (
-              <button
-                type="submit"
-                disabled={submitting}
-                className="rounded-md bg-navy-900 px-7 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-navy-800 disabled:opacity-50"
-              >
-                {submitting ? 'Submitting...' : 'Get matched with a dealer'}
-              </button>
-            )}
-          </div>
-        </form>
-      </div>
-
-      <div className="order-1 lg:order-2">
-        <RenderTeaser />
-      </div>
+      <RenderTeaser />
     </div>
   )
 }
 
-// A static, purely decorative "locked reveal" card -- no 3D scene, no API
-// call, nothing generated. It exists only to tell a visitor a real photo
-// of their exact pool is waiting on the other side of the form, which is
-// the whole point of not showing them a free preview along the way: the
+// A static, purely decorative "locked reveal" strip -- no 3D scene, no API
+// call, nothing generated. It exists only to tell a visitor a real photo of
+// their exact pool is waiting on the other side of the form, which is the
+// whole point of not showing them a free preview along the way: the
 // photoreal image only gets generated once, after submission (see
 // PhotorealReveal), so this costs nothing to render and nothing in image
-// generation credits no matter how long someone lingers on the form.
+// generation credits no matter how long someone lingers on the form. Kept
+// deliberately small and out of the way -- nothing here is actually live
+// while the form is being filled in, so it doesn't earn more visual weight
+// than a short note under the form, in every viewport rather than a
+// dedicated side column.
 function RenderTeaser() {
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-6 text-center">
-      <svg viewBox="-10 -10 20 20" width={30} height={30} stroke="currentColor" fill="none" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" className="text-navy-700">
+    <div className="mt-4 flex items-center gap-3 rounded-md border border-slate-200 bg-slate-50 px-4 py-3">
+      <svg
+        viewBox="-10 -10 20 20"
+        width={20}
+        height={20}
+        stroke="currentColor"
+        fill="none"
+        strokeWidth={1.6}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="shrink-0 text-navy-700"
+      >
         <rect x={-6} y={-1} width={12} height={9} rx={1.5} />
         <path d="M -3.5 -1 L -3.5 -4 A 3.5 3.5 0 0 1 3.5 -4 L 3.5 -1" />
         <circle cx={0} cy={3.3} r={1.3} fill="currentColor" stroke="none" />
       </svg>
-      <p className="text-sm font-semibold text-navy-900">Your photorealistic rendering is waiting</p>
-      <p className="text-xs leading-relaxed text-slate-500">
-        Finish the form and we'll generate a free photorealistic image of your exact pool — shape, size, and every
-        extra you picked.
+      <p className="text-xs leading-relaxed text-slate-600">
+        <span className="font-semibold text-navy-900">Your photorealistic rendering is waiting.</span> Finish
+        the form and we'll generate a free image of your exact pool — yours to keep.
       </p>
     </div>
   )
