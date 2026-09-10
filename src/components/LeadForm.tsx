@@ -264,6 +264,12 @@ export default function LeadForm() {
   const [renderPhase, setRenderPhase] = useState<'idle' | 'capturing' | 'generating' | 'ready' | 'unavailable' | 'error'>('idle')
   const [renderUrl, setRenderUrl] = useState<string | null>(null)
   const [renderConfig, setRenderConfig] = useState<ResolvedPoolVisualConfig | null>(null)
+  // Held onto purely so PhotorealReveal can hand it back to the edge
+  // function once the render is ready -- that's the only way the
+  // send-lead-email trigger knows which lead row to attach the photo to
+  // and email, since this id is generated client-side and never read back
+  // from the database.
+  const [submittedLeadId, setSubmittedLeadId] = useState<string | null>(null)
 
   const [step, setStep] = useState(0)
 
@@ -387,6 +393,7 @@ export default function LeadForm() {
       }),
     )
     setRenderPhase('capturing')
+    setSubmittedLeadId(leadId)
     setSubmitting(false)
     setSubmitted(true)
   }
@@ -400,6 +407,7 @@ export default function LeadForm() {
         setPhase={setRenderPhase}
         renderUrl={renderUrl}
         setRenderUrl={setRenderUrl}
+        leadId={submittedLeadId}
       />
     )
   }
@@ -679,6 +687,7 @@ function PhotorealReveal({
   setPhase,
   renderUrl,
   setRenderUrl,
+  leadId,
 }: {
   firstName: string
   config: ResolvedPoolVisualConfig | null
@@ -686,6 +695,7 @@ function PhotorealReveal({
   setPhase: (p: RenderPhase) => void
   renderUrl: string | null
   setRenderUrl: (u: string | null) => void
+  leadId: string | null
 }) {
   const [guideDataUrl, setGuideDataUrl] = useState<string | null>(null)
   const requestedRef = useRef(false)
@@ -716,6 +726,7 @@ function PhotorealReveal({
           ledLighting: cfg.ledLighting,
           guideImageBase64: dataUrl.split(',')[1] ?? '',
           guideMimeType: 'image/png',
+          leadId,
         },
       })
 

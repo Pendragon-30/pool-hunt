@@ -26,6 +26,9 @@ type Lead = {
   dealer_id: string | null
   matched_at: string | null
   created_at: string
+  render_url: string | null
+  homeowner_email_sent_at: string | null
+  dealer_email_sent_at: string | null
   dealers: { business_name: string } | null
   lead_fun_features: { fun_features: { name: string } | null }[]
 }
@@ -53,6 +56,7 @@ export default function LeadsDashboard() {
         .select(
           `id, name, email, phone, zip_code, pool_type, shape, construction, filtration, heater, cover,
            budget_range, timeline, status, dealer_id, matched_at, created_at,
+           render_url, homeowner_email_sent_at, dealer_email_sent_at,
            dealers ( business_name ),
            lead_fun_features ( fun_features ( name ) )`,
         )
@@ -101,6 +105,17 @@ export default function LeadsDashboard() {
       .from('leads')
       .update({ dealer_id: dealerId || null, matched_at })
       .eq('id', leadId)
+
+    // Assigning a dealer is the trigger for the "here's a full picture of
+    // what this shopper wants" email -- fire it the moment a real dealer
+    // is chosen (not on unassign). send-lead-email looks up the dealer's
+    // email itself and just no-ops if it's missing, so no need to check
+    // for that here.
+    if (dealerId) {
+      supabase.functions.invoke('send-lead-email', { body: { leadId, type: 'dealer' } }).catch((err) => {
+        console.error('Failed to send dealer notification email', err)
+      })
+    }
   }
 
   return (
@@ -128,6 +143,7 @@ export default function LeadsDashboard() {
                   <th className="px-4 py-3">Fun extras</th>
                   <th className="px-4 py-3">Budget / Timeline</th>
                   <th className="px-4 py-3">Dealer</th>
+                  <th className="px-4 py-3">Emails</th>
                   <th className="px-4 py-3">Status</th>
                 </tr>
               </thead>
@@ -176,6 +192,10 @@ export default function LeadsDashboard() {
                           </option>
                         ))}
                       </select>
+                    </td>
+                    <td className="px-4 py-3 text-slate-600">
+                      <div>Homeowner: {lead.homeowner_email_sent_at ? '✓ sent' : '—'}</div>
+                      <div>Dealer: {lead.dealer_email_sent_at ? '✓ sent' : '—'}</div>
                     </td>
                     <td className="px-4 py-3">
                       <select
