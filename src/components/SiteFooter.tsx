@@ -20,8 +20,8 @@ export default function SiteFooter() {
               <span className="text-base font-bold text-white">Design My Swimming Pool</span>
             </Link>
             <p className="mt-4 max-w-sm text-sm leading-relaxed text-navy-300">
-              An independent, unbiased comparison tool that matches homeowners with reputable local
-              pool builders — free, and with no obligation to buy.
+              A simpler way to shop for a pool: tell us what you want once, and a reputable local
+              builder brings the quote to you — free, and with no obligation to buy.
             </p>
           </div>
 

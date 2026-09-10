@@ -13,7 +13,8 @@ html {
    horizontally scrollable, and that's a worse failure mode than clipping an
    edge case. */
 html,
-body {
+body,
+#root {
   overflow-x: hidden;
   width: 100%;
 }

@@ -16,22 +16,22 @@ const STEPS = [
     body: 'See a realistic rendering of your exact pool — shape, size, and every feature — before you talk pricing with anyone.',
   },
   {
-    title: 'Get matched with a trusted builder',
-    body: "We connect you with a reputable, vetted dealer in your area who already knows exactly what you're looking for.",
+    title: 'The quote comes to you',
+    body: "A reputable, vetted local builder reaches out to you — already knowing exactly what you're looking for. No calling around.",
   },
 ]
 
 const BENEFITS = [
   {
-    title: 'Unbiased, exhaustive comparisons',
-    body: 'Every shape, size, material, and feature combination — laid out clearly so you know exactly what you’re choosing between.',
+    title: 'One form, not five phone calls',
+    body: 'Tell us what you want once. Skip repeating your shape, size, and budget to a different contractor every time you pick up the phone.',
   },
   {
     title: 'See it before you buy',
     body: 'A free photorealistic rendering of your exact pool configuration, generated just for you — not a generic stock photo.',
   },
   {
-    title: 'Reputable dealers only',
+    title: 'Reputable builders only',
     body: 'We connect you with builders who’ve earned their spot — not the highest bidder, and never a shared lead sold to five competitors.',
   },
   {
@@ -57,17 +57,13 @@ function App() {
         {/* Hero */}
         <section className="bg-gradient-to-b from-navy-950 to-navy-900 text-white">
           <div className="mx-auto max-w-5xl px-6 py-16 text-center sm:py-24">
-            <span className="inline-flex items-center rounded-md border border-white/15 px-3 py-1 text-xs font-medium tracking-wide text-sky-200">
-              The definitive pool-shopping comparison tool
-            </span>
-
-            <h1 className="mx-auto mt-6 max-w-3xl text-4xl font-extrabold tracking-tight sm:text-6xl">
-              Get matched with a pool builder <span className="text-sky-400">you can trust.</span>
+            <h1 className="mx-auto max-w-3xl text-4xl font-extrabold tracking-tight sm:text-6xl">
+              Stop hunting for quotes. <span className="text-sky-400">Let them come to you.</span>
             </h1>
 
             <p className="mx-auto mt-5 max-w-2xl text-lg text-navy-200 sm:text-xl">
-              Tell us what you're looking for and we'll connect you with a reputable local dealer —
-              plus a free photorealistic preview of your exact pool.
+              Tell us what you're looking for once — a reputable local builder reaches out to you,
+              plus you get a free photorealistic preview of your exact pool.
             </p>
 
             <div className="mt-9 flex flex-col items-center justify-center gap-4 sm:flex-row">
@@ -98,8 +94,8 @@ function App() {
             <Reveal className="text-center">
               <h2 className="text-3xl font-bold tracking-tight text-navy-900 sm:text-4xl">How it works</h2>
               <p className="mx-auto mt-3 max-w-xl text-slate-600">
-                Three quick steps between where you are now and a real quote from a builder worth
-                trusting.
+                Three quick steps between filling out one form and a real quote landing in your
+                inbox — no calling around required.
               </p>
             </Reveal>
 

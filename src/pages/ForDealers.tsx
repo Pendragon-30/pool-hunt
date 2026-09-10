@@ -94,10 +94,7 @@ export default function ForDealers() {
       <main>
         <section className="bg-gradient-to-b from-navy-950 to-navy-900 text-white">
           <div className="mx-auto max-w-4xl px-6 py-16 text-center sm:py-24">
-            <span className="inline-flex items-center rounded-md border border-white/15 px-3 py-1 text-xs font-medium tracking-wide text-sky-200">
-              For pool dealers &amp; builders
-            </span>
-            <h1 className="mx-auto mt-6 max-w-2xl text-4xl font-extrabold tracking-tight sm:text-5xl">
+            <h1 className="mx-auto max-w-2xl text-4xl font-extrabold tracking-tight sm:text-5xl">
               Get matched with buyers <span className="text-sky-400">actively shopping</span> in your
               area.
             </h1>
