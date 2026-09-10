@@ -122,6 +122,71 @@ const TIMELINES = [
   { value: 'just_researching', label: 'Just researching' },
 ]
 
+// Real-world install constraints for each optional extra, researched
+// against industry sources (the ANSI/APSP/ICC-5 diving-board depth/length
+// standard, pool-builder guidance on what above-ground manufacturers
+// actually sell, and manufacturer pages on fiberglass/vinyl-liner tanning
+// ledge and spa-combo availability). The goal is to hide a combination
+// only when it genuinely isn't a real product or installation -- not to be
+// conservative by default. A few combos that read as "probably not
+// compatible" at a glance turned out to be real, if less common,
+// installations, so those are deliberately left selectable:
+//
+//   - Construction material (fiberglass / vinyl liner / concrete-gunite)
+//     is NOT filtered on at all. Rock slides, waterfalls, tanning ledges,
+//     and spa combos are most common on concrete/gunite, but fiberglass
+//     manufacturers sell shells pre-molded with a tanning ledge or spa
+//     combo, and all of the above are real (if rarer) custom builds on
+//     vinyl-liner and fiberglass pools too -- e.g. a rock waterfall built
+//     as a freestanding deck feature with its own footing, not tied into
+//     the shell. Hiding those would be wrong, not just cautious.
+//
+// What IS a real, confirmed hard exclusion:
+//   - Above-ground pools never get a built-in tanning ledge, an attached
+//     spa combo, a swim-up bar, a natural rock slide, or a diving board --
+//     none of those are real above-ground products; they all require a
+//     poured/integrated structural shell an AG steel-wall-and-liner pool
+//     doesn't have. A standard slide and a simple water feature ARE real
+//     above-ground products (deck-mounted slides, clip-on spray fountains).
+//   - Lap pools are long, narrow, uniform-depth swim lanes with minimal
+//     deck footprint at either end -- nothing that needs wide bench/shelf
+//     space (tanning ledge, swim-up bar, spa combo, diving board) is a
+//     realistic pairing. A water feature or an end-of-lane waterfall are
+//     the extras that actually get paired with lap pools in practice.
+//   - A diving board needs an ANSI/APSP-5 "diving envelope" -- roughly an
+//     8-8.5ft deep well plus a 16ft forward envelope, effectively 32+ ft of
+//     pool -- so it only fits the large/extra-large size tier.
+//   - A swim-up bar and a built-in hot tub/spa combo both need substantial
+//     dedicated deck/bench space beyond the pool itself (a submerged bar
+//     shelf plus dry bar space; a separate plumbed vessel sharing a wall),
+//     so both are realistically large/extra-large tier only.
+function isExtraCompatible(
+  featureName: string,
+  ctx: { poolType: string; shape: string; poolSize: string },
+): boolean {
+  const isAboveGround = ctx.poolType === 'above_ground'
+  const isLap = ctx.shape === 'lap'
+  // A size that hasn't been picked yet shouldn't hide a large-tier extra --
+  // only an explicit small/medium pick does.
+  const isSubLargeSize = ctx.poolSize === 'small' || ctx.poolSize === 'medium'
+
+  switch (featureName) {
+    case 'Waterfall':
+      return !isAboveGround
+    case 'Natural Slide':
+    case 'Tanning Ledge':
+      return !isAboveGround && !isLap
+    case 'Diving Board':
+    case 'Swim-Up Bar':
+    case 'Hot Tub / Spa Combo':
+      return !isAboveGround && !isLap && !isSubLargeSize
+    default:
+      // Slide, Water Feature, LED Lighting: real products in every
+      // configuration, so nothing to gate.
+      return true
+  }
+}
+
 // The pool-details step normally holds all 7 fields (type/shape/
 // construction/size/filtration/heater/cover) at once, laid out two-per-row
 // once the viewport is wide enough for that (see the `sm:grid-cols-2` grids
@@ -333,6 +398,26 @@ export default function LeadForm() {
     )
   }
 
+  // Only offer extras that are actually real installs for the pool type/
+  // shape/size picked so far (see isExtraCompatible above) -- narrowed as
+  // those fields change, not just at initial load.
+  const availableFeatures = features.filter((f) =>
+    isExtraCompatible(f.name, { poolType, shape, poolSize }),
+  )
+
+  // If a change upstream (switching to above-ground, picking a lap shape,
+  // dropping to a small/medium size) makes a previously-checked extra no
+  // longer realistic, drop it from the selection rather than silently
+  // submit a combination the form no longer even shows as an option.
+  useEffect(() => {
+    setSelectedFeatureIds((prev) =>
+      prev.filter((id) => {
+        const feature = features.find((f) => f.id === id)
+        return feature ? isExtraCompatible(feature.name, { poolType, shape, poolSize }) : true
+      }),
+    )
+  }, [poolType, shape, poolSize, features])
+
   const goNext = () => setStep((s) => Math.min(s + 1, STEPS.length - 1))
   const goBack = () => setStep((s) => Math.max(s - 1, 0))
 
@@ -465,9 +550,9 @@ export default function LeadForm() {
           {currentKind === 'extras' && (
             <div>
               <h2 className="text-lg font-bold text-navy-900">{STEPS[step].title}</h2>
-              {features.length > 0 ? (
+              {availableFeatures.length > 0 ? (
                 <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-                  {features.map((feature) => (
+                  {availableFeatures.map((feature) => (
                     <label
                       key={feature.id}
                       className="flex cursor-pointer items-center gap-2 rounded-md border border-slate-300 px-3 py-2.5 text-sm text-slate-700 transition-colors hover:border-slate-400 has-[:checked]:border-navy-700 has-[:checked]:bg-navy-50 has-[:checked]:text-navy-900"
@@ -484,6 +569,12 @@ export default function LeadForm() {
                 </div>
               ) : (
                 <p className="mt-3 text-sm text-slate-500">No optional extras to show right now.</p>
+              )}
+              {availableFeatures.length < features.length && (
+                <p className="mt-3 text-xs text-slate-500">
+                  A few extras aren't shown here — they're not realistic builds for the pool type, shape, or size
+                  you picked.
+                </p>
               )}
             </div>
           )}
