@@ -50,12 +50,30 @@ const ABOVE_GROUND_SHAPES = [
 // "I'm not sure yet" here because the 3D preview and the final photoreal
 // render both need a concrete size to scale against, and "medium" is already
 // the sensible default when someone hasn't thought about it yet.
+//
+// The sq-ft ranges in the labels below are deliberately NOT derived from
+// SIZE_MULTIPLIERS in src/three/poolGeometry.ts -- that table scales a
+// pool's footprint purely to control how much of the camera's frame it
+// fills (its own comments are explicit about this: "every combo gets
+// normalized to fill the frame the same way"), so its "large"/"extra_large"
+// multipliers (2x / 3x a shape's baseline) land on footprints far bigger
+// than any real residential pool -- a 2x rectangle alone is ~2,000 sq ft.
+// These ranges instead come from actual industry size charts (HomeGuide,
+// Angi, Latham) for real small/medium/large/extra-large residential pools,
+// so what a shopper reads here matches what a pool actually that size
+// looks like in a backyard -- not what the 3D preview's camera math needed.
 const SIZES = [
-  { value: 'small', label: 'Small' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'large', label: 'Large' },
-  { value: 'extra_large', label: 'Extra Large' },
+  { value: 'small', label: 'Small (~150–300 sq ft)' },
+  { value: 'medium', label: 'Medium (~300–650 sq ft)' },
+  { value: 'large', label: 'Large (~650–1,000 sq ft)' },
+  { value: 'extra_large', label: 'Extra Large (1,000+ sq ft)' },
 ]
+
+// Above-ground kits top out around 33-36ft round / 18x44ft oval -- roughly
+// what an inground buyer would call "large," not a distinct "extra-large"
+// tier. Extra-large isn't a real above-ground product, so it's dropped
+// rather than offered and then quietly resolved down to something smaller.
+const ABOVE_GROUND_SIZES = SIZES.filter((s) => s.value !== 'extra_large')
 
 const CONSTRUCTIONS = [
   { value: 'fiberglass', label: 'Fiberglass' },
@@ -96,6 +114,13 @@ const COVERS = [
   { value: 'safety_cover', label: 'Safety cover' },
   { value: 'undecided', label: "I'm not sure yet" },
 ]
+
+// A motorized, track-based automatic cover needs a deck-mounted or
+// under-coping track -- that's an inground-only installation. (An anchored
+// safety cover, by contrast, IS a real above-ground product too, just a
+// different strap-anchored system than the inground version, so it stays
+// on the list.)
+const ABOVE_GROUND_COVERS = COVERS.filter((c) => c.value !== 'automatic')
 
 // Inground pools (especially concrete/gunite, or anything with a heater,
 // automatic cover, and a couple of fun extras) commonly land well above
@@ -363,13 +388,28 @@ export default function LeadForm() {
     })
   }, [isWide])
 
-  const shapeOptions = poolType === 'above_ground' ? ABOVE_GROUND_SHAPES : ALL_SHAPES
-  const constructionOptions = poolType === 'above_ground' ? ABOVE_GROUND_CONSTRUCTIONS : CONSTRUCTIONS
+  // Fiberglass is a fixed, pre-manufactured mold -- real standard molds
+  // exist for freeform, kidney, oval, round, and even lap shapes (River
+  // Pools, Leisure Pools, Barrier Reef, Latham all sell those), but a truly
+  // "custom" one-off shape is only achievable poured on-site (concrete/
+  // gunite, or a custom-cut vinyl liner) -- not from a mold. So "Custom" is
+  // the one shape fiberglass can't actually offer.
+  const baseShapeOptions = poolType === 'above_ground' ? ABOVE_GROUND_SHAPES : ALL_SHAPES
+  const shapeOptions =
+    construction === 'fiberglass' ? baseShapeOptions.filter((s) => s.value !== 'custom') : baseShapeOptions
+
+  const baseConstructionOptions = poolType === 'above_ground' ? ABOVE_GROUND_CONSTRUCTIONS : CONSTRUCTIONS
+  const constructionOptions =
+    shape === 'custom' ? baseConstructionOptions.filter((c) => c.value !== 'fiberglass') : baseConstructionOptions
+
+  const sizeOptions = poolType === 'above_ground' ? ABOVE_GROUND_SIZES : SIZES
+  const coverOptions = poolType === 'above_ground' ? ABOVE_GROUND_COVERS : COVERS
 
   const handlePoolTypeChange = (value: string) => {
     setPoolType(value)
-    // Above-ground only offers round/oval and vinyl liner — clear any
-    // incompatible pick rather than leave a hidden, invalid selection in place.
+    // Above-ground only offers round/oval, vinyl liner, small/medium/large,
+    // and no automatic cover — clear any incompatible pick rather than
+    // leave a hidden, invalid selection in place.
     if (value === 'above_ground' && shape && !ABOVE_GROUND_SHAPES.some((s) => s.value === shape)) {
       setShape('')
     }
@@ -379,6 +419,29 @@ export default function LeadForm() {
       !ABOVE_GROUND_CONSTRUCTIONS.some((c) => c.value === construction)
     ) {
       setConstruction('')
+    }
+    if (value === 'above_ground' && poolSize === 'extra_large') {
+      setPoolSize('')
+    }
+    if (value === 'above_ground' && cover === 'automatic') {
+      setCover('')
+    }
+  }
+
+  // Shape and construction can each rule the other out (fiberglass <->
+  // custom shape) -- these wrap the plain setters so picking one side of
+  // that pair clears the other if it's now invalid, the same pattern
+  // handlePoolTypeChange already uses above.
+  const handleShapeChange = (value: string) => {
+    setShape(value)
+    if (value === 'custom' && construction === 'fiberglass') {
+      setConstruction('')
+    }
+  }
+  const handleConstructionChange = (value: string) => {
+    setConstruction(value)
+    if (value === 'fiberglass' && shape === 'custom') {
+      setShape('')
     }
   }
 
@@ -502,14 +565,14 @@ export default function LeadForm() {
   const poolDetailsFields = (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
       <SelectField label="Pool type" value={poolType} onChange={handlePoolTypeChange} options={POOL_TYPES} />
-      <SelectField label="Shape" value={shape} onChange={setShape} options={shapeOptions} />
+      <SelectField label="Shape" value={shape} onChange={handleShapeChange} options={shapeOptions} />
       <SelectField
         label="Construction"
         value={construction}
-        onChange={setConstruction}
+        onChange={handleConstructionChange}
         options={constructionOptions}
       />
-      <SelectField label="Pool size" value={poolSize} onChange={setPoolSize} options={SIZES} />
+      <SelectField label="Pool size" value={poolSize} onChange={setPoolSize} options={sizeOptions} />
     </div>
   )
 
@@ -517,7 +580,7 @@ export default function LeadForm() {
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
       <SelectField label="Filtration" value={filtration} onChange={setFiltration} options={FILTRATIONS} />
       <SelectField label="Heater" value={heater} onChange={setHeater} options={HEATERS} />
-      <SelectField label="Cover" value={cover} onChange={setCover} options={COVERS} />
+      <SelectField label="Cover" value={cover} onChange={setCover} options={coverOptions} />
     </div>
   )
 
