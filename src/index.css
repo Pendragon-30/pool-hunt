@@ -6,8 +6,20 @@ html {
   scroll-behavior: smooth;
 }
 
+/* Hard guarantee against sideways scroll/"off-center columns" on phones and
+   tablets: this should never be needed if every section is properly
+   responsive, but one overflowing child (a too-wide header row on a narrow
+   phone, a long unbreakable string, etc.) is enough to make the whole page
+   horizontally scrollable, and that's a worse failure mode than clipping an
+   edge case. */
+html,
 body {
-  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  overflow-x: hidden;
+  width: 100%;
+}
+
+body {
+  font-family: 'Barlow', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 
 ::selection {

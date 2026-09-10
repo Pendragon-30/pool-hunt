@@ -129,7 +129,7 @@ const STEPS = [
 ]
 
 const fieldClasses =
-  'mt-1.5 block w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 hover:border-slate-300 focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-100'
+  'mt-1.5 block w-full rounded-md border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 hover:border-slate-400 focus:border-navy-600 focus:ring-2 focus:ring-navy-100'
 
 function SelectField({
   label,
@@ -189,12 +189,10 @@ function StepProgress({ step }: { step: number }) {
             />
           )}
           <div
-            className={`relative z-10 flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold transition-all duration-300 ${
-              i < step
+            className={`relative z-10 flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold transition-colors duration-300 ${
+              i <= step
                 ? 'bg-navy-900 text-white'
-                : i === step
-                  ? 'bg-gradient-to-br from-sky-400 to-navy-700 text-white shadow-md shadow-sky-900/20 ring-4 ring-sky-100'
-                  : 'border-2 border-slate-200 bg-white text-slate-400'
+                : 'border-2 border-slate-200 bg-white text-slate-400'
             }`}
           >
             {i < step ? (
@@ -370,7 +368,7 @@ export default function LeadForm() {
       <div className="order-2 lg:order-1">
         <form
           onSubmit={handleSubmit}
-          className="rounded-3xl border border-slate-100 bg-white p-6 shadow-xl shadow-navy-900/5 sm:p-8"
+          className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm sm:p-8"
         >
           <StepProgress step={step} />
 
@@ -413,7 +411,7 @@ export default function LeadForm() {
                     {features.map((feature) => (
                       <label
                         key={feature.id}
-                        className="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 px-3 py-2.5 text-sm text-slate-700 transition-all hover:border-slate-300 has-[:checked]:border-sky-400 has-[:checked]:bg-sky-50 has-[:checked]:text-navy-900 has-[:checked]:shadow-sm"
+                        className="flex cursor-pointer items-center gap-2 rounded-md border border-slate-300 px-3 py-2.5 text-sm text-slate-700 transition-colors hover:border-slate-400 has-[:checked]:border-navy-700 has-[:checked]:bg-navy-50 has-[:checked]:text-navy-900"
                       >
                         <input
                           type="checkbox"
@@ -449,7 +447,7 @@ export default function LeadForm() {
             {step === 3 && (
               <div>
                 <h2 className="text-lg font-bold text-navy-900">{STEPS[3].title}</h2>
-                <p className="mt-1.5 rounded-xl bg-sky-50 px-3.5 py-2.5 text-sm text-navy-800">
+                <p className="mt-1.5 text-sm text-navy-700">
                   Submit your info and we'll generate a free photorealistic rendering of your exact pool —
                   yours to keep.
                 </p>
@@ -505,7 +503,7 @@ export default function LeadForm() {
               type="button"
               onClick={goBack}
               disabled={step === 0}
-              className="rounded-full px-4 py-2.5 text-sm font-semibold text-slate-500 transition-colors hover:bg-slate-50 hover:text-navy-900 disabled:opacity-0"
+              className="rounded-md px-4 py-2.5 text-sm font-semibold text-slate-500 transition-colors hover:bg-slate-50 hover:text-navy-900 disabled:opacity-0"
             >
               Back
             </button>
@@ -514,7 +512,7 @@ export default function LeadForm() {
               <button
                 type="button"
                 onClick={goNext}
-                className="rounded-full bg-navy-900 px-7 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:-translate-y-0.5 hover:bg-navy-800 hover:shadow-lg active:translate-y-0"
+                className="rounded-md bg-navy-900 px-7 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-navy-800"
               >
                 Next
               </button>
@@ -522,7 +520,7 @@ export default function LeadForm() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="rounded-full bg-navy-900 px-7 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:-translate-y-0.5 hover:bg-navy-800 hover:shadow-lg active:translate-y-0 disabled:opacity-50 disabled:hover:translate-y-0"
+                className="rounded-md bg-navy-900 px-7 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-navy-800 disabled:opacity-50"
               >
                 {submitting ? 'Submitting...' : 'Get matched with a dealer'}
               </button>
@@ -547,14 +545,12 @@ export default function LeadForm() {
 // generation credits no matter how long someone lingers on the form.
 function RenderTeaser() {
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-3 rounded-3xl border border-dashed border-sky-200 bg-gradient-to-b from-sky-50 to-white p-6 text-center shadow-sm">
-      <div className="flex h-14 w-14 animate-float items-center justify-center rounded-2xl bg-gradient-to-br from-sky-400 to-navy-700 text-white shadow-md shadow-sky-900/10">
-        <svg viewBox="-10 -10 20 20" width={26} height={26} stroke="currentColor" fill="none" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
-          <rect x={-6} y={-1} width={12} height={9} rx={1.5} />
-          <path d="M -3.5 -1 L -3.5 -4 A 3.5 3.5 0 0 1 3.5 -4 L 3.5 -1" />
-          <circle cx={0} cy={3.3} r={1.3} fill="currentColor" stroke="none" />
-        </svg>
-      </div>
+    <div className="flex h-full flex-col items-center justify-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-6 text-center">
+      <svg viewBox="-10 -10 20 20" width={30} height={30} stroke="currentColor" fill="none" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" className="text-navy-700">
+        <rect x={-6} y={-1} width={12} height={9} rx={1.5} />
+        <path d="M -3.5 -1 L -3.5 -4 A 3.5 3.5 0 0 1 3.5 -4 L 3.5 -1" />
+        <circle cx={0} cy={3.3} r={1.3} fill="currentColor" stroke="none" />
+      </svg>
       <p className="text-sm font-semibold text-navy-900">Your photorealistic rendering is waiting</p>
       <p className="text-xs leading-relaxed text-slate-500">
         Finish the form and we'll generate a free photorealistic image of your exact pool — shape, size, and every
@@ -699,9 +695,9 @@ function PhotorealReveal({
   }
 
   return (
-    <div className="mx-auto max-w-xl animate-fade-in-up rounded-3xl border border-slate-100 bg-white p-8 text-center shadow-xl shadow-navy-900/5 sm:p-10">
-      <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-sky-400 to-navy-700 text-white shadow-md shadow-sky-900/10">
-        <svg viewBox="0 0 24 24" width={26} height={26} fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+    <div className="mx-auto max-w-xl animate-fade-in-up rounded-lg border border-slate-200 bg-white p-8 text-center shadow-sm sm:p-10">
+      <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-navy-800 text-white">
+        <svg viewBox="0 0 24 24" width={22} height={22} fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
           <path d="M5 12.5 10 17 19 7" />
         </svg>
       </span>
@@ -712,7 +708,7 @@ function PhotorealReveal({
 
       {config && phase !== 'unavailable' && phase !== 'error' && (
         <div className="mt-6">
-          <div className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl bg-slate-100 shadow-inner">
+          <div className="relative aspect-[4/3] w-full overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
             {phase === 'ready' && renderUrl ? (
               <img
                 src={renderUrl}

@@ -22,9 +22,13 @@ export default {
           950: '#0a1628',
         },
       },
+      // Barlow reads as a sturdier, more utilitarian/industrial grotesque
+      // than a default SaaS font like Inter -- closer to the trade/contractor
+      // sites this design is modeled after (metalbuildingoutfitters.com) than
+      // to a generic AI-generated-landing-page look.
       fontFamily: {
         sans: [
-          'Inter',
+          'Barlow',
           'system-ui',
           '-apple-system',
           'Segoe UI',
@@ -45,16 +49,11 @@ export default {
           from: { opacity: 0, transform: 'translateX(12px)' },
           to: { opacity: 1, transform: 'translateX(0)' },
         },
-        float: {
-          '0%, 100%': { transform: 'translateY(0)' },
-          '50%': { transform: 'translateY(-10px)' },
-        },
       },
       animation: {
         'fade-in-up': 'fade-in-up 700ms cubic-bezier(0.16, 1, 0.3, 1) both',
         'fade-in': 'fade-in 600ms ease-out both',
         'step-in': 'step-in 320ms cubic-bezier(0.16, 1, 0.3, 1) both',
-        float: 'float 6s ease-in-out infinite',
       },
     },
   },

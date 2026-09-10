@@ -38,7 +38,7 @@ const BENEFITS = [
 ]
 
 const fieldClasses =
-  'mt-1.5 block w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 hover:border-slate-300 focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-100'
+  'mt-1.5 block w-full rounded-md border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 hover:border-slate-400 focus:border-navy-600 focus:ring-2 focus:ring-navy-100'
 
 export default function ForDealers() {
   const [form, setForm] = useState(emptyForm)
@@ -92,10 +92,9 @@ export default function ForDealers() {
       <SiteHeader />
 
       <main>
-        <section className="relative overflow-hidden bg-gradient-to-b from-navy-950 via-navy-900 to-navy-800 text-white">
-          <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-sky-500/20 blur-3xl" />
-          <div className="relative mx-auto max-w-4xl px-6 py-16 text-center sm:py-24">
-            <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-1.5 text-xs font-medium tracking-wide text-sky-200">
+        <section className="bg-gradient-to-b from-navy-950 to-navy-900 text-white">
+          <div className="mx-auto max-w-4xl px-6 py-16 text-center sm:py-24">
+            <span className="inline-flex items-center rounded-md border border-white/15 px-3 py-1 text-xs font-medium tracking-wide text-sky-200">
               For pool dealers &amp; builders
             </span>
             <h1 className="mx-auto mt-6 max-w-2xl text-4xl font-extrabold tracking-tight sm:text-5xl">
@@ -111,24 +110,21 @@ export default function ForDealers() {
 
         <section className="bg-white px-6 py-20">
           <div className="mx-auto max-w-5xl">
-            <div className="relative grid gap-10 sm:grid-cols-3">
-              <div className="pointer-events-none absolute left-0 right-0 top-6 hidden h-px bg-gradient-to-r from-transparent via-sky-200 to-transparent sm:block" />
+            <div className="grid gap-10 sm:grid-cols-3">
               {STEPS.map((s, i) => (
-                <Reveal key={s.title} delay={i * 120} className="relative text-center">
-                  <div className="relative mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-sky-400 to-navy-700 text-lg font-bold text-white shadow-md shadow-sky-900/10">
-                    {i + 1}
-                  </div>
-                  <h3 className="mt-4 font-semibold text-navy-900">{s.title}</h3>
+                <Reveal key={s.title} delay={i * 100} className="border-t-2 border-navy-800 pt-5 text-left">
+                  <div className="text-3xl font-extrabold text-navy-800">{`0${i + 1}`}</div>
+                  <h3 className="mt-3 font-semibold text-navy-900">{s.title}</h3>
                   <p className="mt-1.5 text-sm leading-relaxed text-slate-600">{s.body}</p>
                 </Reveal>
               ))}
             </div>
 
-            <Reveal className="mx-auto mt-16 max-w-2xl rounded-2xl border border-slate-100 bg-sky-50/60 p-6">
+            <Reveal className="mx-auto mt-16 max-w-2xl border-t border-slate-200 pt-8">
               <ul className="space-y-3">
                 {BENEFITS.map((b) => (
                   <li key={b} className="flex items-start gap-3 text-sm text-navy-900">
-                    <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" className="mt-0.5 shrink-0 text-sky-600">
+                    <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" className="mt-0.5 shrink-0 text-navy-700">
                       <path d="M5 12.5 10 17 19 7" />
                     </svg>
                     {b}
@@ -139,12 +135,12 @@ export default function ForDealers() {
           </div>
         </section>
 
-        <section className="bg-gradient-to-b from-sky-50 to-white px-6 py-20">
-          <Reveal className="mx-auto max-w-xl rounded-3xl border border-slate-100 bg-white p-8 shadow-xl shadow-navy-900/5 sm:p-10">
+        <section className="bg-slate-50 px-6 py-20">
+          <Reveal className="mx-auto max-w-xl rounded-lg border border-slate-200 bg-white p-8 shadow-sm sm:p-10">
             {submitted ? (
               <div className="text-center">
-                <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-sky-400 to-navy-700 text-white shadow-md shadow-sky-900/10">
-                  <svg viewBox="0 0 24 24" width={26} height={26} fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-navy-800 text-white">
+                  <svg viewBox="0 0 24 24" width={22} height={22} fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
                     <path d="M5 12.5 10 17 19 7" />
                   </svg>
                 </span>
@@ -253,7 +249,7 @@ export default function ForDealers() {
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="w-full rounded-full bg-navy-900 px-4 py-2.5 font-semibold text-white shadow-md transition-all hover:-translate-y-0.5 hover:bg-navy-800 hover:shadow-lg active:translate-y-0 disabled:opacity-50 disabled:hover:translate-y-0"
+                    className="w-full rounded-md bg-navy-900 px-4 py-2.5 font-semibold text-white transition-colors hover:bg-navy-800 disabled:opacity-50"
                   >
                     {submitting ? 'Submitting...' : 'Request to partner'}
                   </button>

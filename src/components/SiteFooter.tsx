@@ -6,20 +6,18 @@ import { Link } from 'react-router-dom'
 // contact info or claimed certifications.
 export default function SiteFooter() {
   return (
-    <footer className="bg-navy-950 text-navy-100">
+    <footer className="border-t border-navy-800 bg-navy-950 text-navy-100">
       <div className="mx-auto max-w-6xl px-6 py-14">
         <div className="grid gap-10 sm:grid-cols-2 md:grid-cols-4">
           <div className="md:col-span-2">
-            <Link to="/" className="flex items-center gap-2.5">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-sky-400 to-navy-600 text-white">
-                <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+            <Link to="/" className="flex items-center gap-2">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-navy-800 text-white">
+                <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                   <path d="M3 16c1.5-1.5 3-1.5 4.5 0s3 1.5 4.5 0 3-1.5 4.5 0 3 1.5 4.5 0" />
                   <path d="M3 20c1.5-1.5 3-1.5 4.5 0s3 1.5 4.5 0 3-1.5 4.5 0 3 1.5 4.5 0" />
-                  <path d="M12 3v9" />
-                  <path d="M8.5 8.5 12 12l3.5-3.5" />
                 </svg>
               </span>
-              <span className="text-lg font-bold text-white">Design My Swimming Pool</span>
+              <span className="text-base font-bold text-white">Design My Swimming Pool</span>
             </Link>
             <p className="mt-4 max-w-sm text-sm leading-relaxed text-navy-300">
               An independent, unbiased comparison tool that matches homeowners with reputable local

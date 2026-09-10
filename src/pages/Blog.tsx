@@ -50,20 +50,20 @@ export default function Blog() {
           <p className="text-sm text-slate-500">No posts published yet — check back soon.</p>
         )}
 
-        <div className="space-y-6">
+        <div className="divide-y divide-slate-200">
           {posts.map((post, i) => (
             <Reveal key={post.id} delay={Math.min(i, 4) * 80}>
-              <article className="group overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg sm:flex">
+              <article className="group py-8 first:pt-0 sm:flex sm:gap-6">
                 {post.cover_image_url && (
-                  <Link to={`/blog/${post.slug}`} className="block sm:w-56 sm:shrink-0">
+                  <Link to={`/blog/${post.slug}`} className="block sm:w-48 sm:shrink-0">
                     <img
                       src={post.cover_image_url}
                       alt=""
-                      className="aspect-video w-full object-cover transition-transform duration-500 group-hover:scale-105 sm:aspect-square sm:h-full"
+                      className="aspect-video w-full rounded-md object-cover sm:aspect-square"
                     />
                   </Link>
                 )}
-                <div className="p-6">
+                <div className="mt-4 sm:mt-0">
                   <p className="text-xs font-medium text-navy-500">
                     {new Date(post.published_at).toLocaleDateString(undefined, {
                       year: 'numeric',
@@ -72,19 +72,16 @@ export default function Blog() {
                     })}
                   </p>
                   <h2 className="mt-1.5 text-xl font-bold text-navy-900">
-                    <Link to={`/blog/${post.slug}`} className="transition-colors hover:text-sky-600">
+                    <Link to={`/blog/${post.slug}`} className="transition-colors group-hover:text-navy-700">
                       {post.title}
                     </Link>
                   </h2>
                   {post.excerpt && <p className="mt-2 text-slate-600">{post.excerpt}</p>}
                   <Link
                     to={`/blog/${post.slug}`}
-                    className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-sky-600 transition-colors hover:text-navy-800"
+                    className="mt-3 inline-block text-sm font-semibold text-navy-700 hover:text-navy-900"
                   >
-                    Read more
-                    <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="transition-transform group-hover:translate-x-0.5">
-                      <path d="M5 12h14M13 6l6 6-6 6" />
-                    </svg>
+                    Read more →
                   </Link>
                 </div>
               </article>
